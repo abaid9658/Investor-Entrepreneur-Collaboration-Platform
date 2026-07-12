@@ -1,0 +1,27 @@
+name: Release Application
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  generate_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Version Tag Release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.payload.ref.replace('refs/tags/', ''),
+              name: `Nexus Release ${context.payload.ref.replace('refs/tags/', '')}`,
+              body: 'Automated tag release from CI/CD pipeline.',
+              draft: false,
+              prerelease: false
+            })

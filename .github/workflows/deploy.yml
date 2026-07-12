@@ -1,0 +1,24 @@
+name: Deploy Application
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  production_deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Frontend Target (Vercel CLI Setup)
+        run: |
+          echo "Simulating deployment of Frontend workspace to Vercel Production..."
+          # In a real environment, you would use: npx vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes
+
+      - name: Deploy Backend Target (Render Webhook Trigger)
+        run: |
+          echo "Simulating deployment of Backend workspace to Render..."
+          # In a real environment, you would use: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}

@@ -1,0 +1,35 @@
+name: Frontend CI
+
+on:
+  push:
+    paths:
+      - 'Frontend/**'
+  pull_request:
+    paths:
+      - 'Frontend/**'
+
+jobs:
+  test_and_build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Frontend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './Frontend/package-lock.json'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run ESlint checks
+        run: npm run lint
+
+      - name: Compile and Build Assets
+        run: npm run build
