@@ -23,7 +23,7 @@ const app = express();
 // 1. SECURITY MIDDLEWARE (OWASP Compliant configurations)
 app.use(helmet());
 
-// Enable CORS — accepts both Vercel production domain and localhost dev server
+// Enable CORS — accepts Vercel production domain, any Vercel preview URL, and localhost
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:5173',
@@ -32,17 +32,20 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, curl)
+    // Allow requests with no origin (Postman, curl, mobile apps)
     if (!origin) return callback(null, true);
+    // Allow any *.vercel.app subdomain (handles preview deployment hashes)
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    // Allow explicitly configured origins
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS policy: origin ${origin} not allowed`));
+    callback(new Error(`CORS blocked: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'token', 'X-Requested-With'],
 }));
 
-// Explicit OPTIONS handler for preflight requests
+// Handle OPTIONS preflight for all routes BEFORE any other middleware
 app.options('*', cors());
 
 // Parsers & limits to prevent payload size abuse
