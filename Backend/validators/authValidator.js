@@ -18,8 +18,8 @@ export const registerValidator = [
     .withMessage('Password must contain at least one uppercase letter'),
   body('role')
     .optional()
-    .isIn(['investor', 'entrepreneur'])
-    .withMessage('Role must be either investor or entrepreneur')
+    .isIn(['investor', 'entrepreneur', 'admin'])
+    .withMessage('Role must be either investor, entrepreneur, or admin')
     .default('entrepreneur')
 ];
 
@@ -34,6 +34,6 @@ export const loginValidator = [
     .trim(),
   body('role')
     .optional()
-    .isIn(['investor', 'entrepreneur'])
-    .withMessage('Role must be either investor or entrepreneur')
+    .isIn(['investor', 'entrepreneur', 'admin'])
+    .withMessage('Role must be either investor, entrepreneur, or admin')
 ];

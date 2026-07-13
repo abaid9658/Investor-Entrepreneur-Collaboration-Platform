@@ -143,7 +143,7 @@ export const RegisterPage: React.FC = () => {
                   required
                   value={password}
                   onChange={e => { setPassword(e.target.value); setPwdTouched(true); }}
-                  placeholder="e.g. MyPass1234"
+                  placeholder="Min 8 characters"
                   className={`w-full bg-white/10 border rounded-xl pl-10 pr-12 py-3 text-white placeholder-white/30 focus:outline-none focus:bg-white/15 transition-all ${
                     pwdTouched && !allRulesPassed
                       ? 'border-red-400/60 focus:border-red-400'

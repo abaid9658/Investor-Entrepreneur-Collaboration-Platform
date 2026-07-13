@@ -12,6 +12,7 @@ import {
   confirmPayment,
   getTransactionById,
 } from '../../api/services/paymentService';
+import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -35,9 +36,7 @@ export const PaymentsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
   const [showInvestModal, setShowInvestModal] = useState(false);
-  
-  // Modal flow step state
-  const [modalStep, setModalStep] = useState<'details' | 'card' | 'processing'>('details');
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const [investForm, setInvestForm] = useState({ amount: '', currency: 'usd', recipientId: '', description: '' });
   const [cardForm, setCardForm] = useState({ name: '', number: '', expiry: '', cvv: '' });
@@ -64,12 +63,12 @@ export const PaymentsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['ledger'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
       setShowInvestModal(false);
-      setModalStep('details');
+      setIsProcessing(false);
       setInvestForm({ amount: '', currency: 'usd', recipientId: '', description: '' });
       setCardForm({ name: '', number: '', expiry: '', cvv: '' });
     },
     onError: (err: any) => {
-      setModalStep('card');
+      setIsProcessing(false);
       toast.error(err.response?.data?.message || 'Payment confirmation failed');
     },
   });
@@ -79,38 +78,34 @@ export const PaymentsPage: React.FC = () => {
     onSuccess: async (data) => {
       const txId = data.data?.transactionId;
       if (txId) {
-        // Confirms payment intent
         await confirmMutation.mutateAsync({ transactionId: txId, paymentMethodId: 'pm_card_visa' });
       }
     },
     onError: (err: any) => {
-      setModalStep('card');
+      setIsProcessing(false);
       toast.error(err.response?.data?.message || 'Payment initiation failed');
     },
   });
 
   const handleInvestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (modalStep === 'details') {
-      if (!investForm.amount || parseFloat(investForm.amount) <= 0) {
-        toast.error('Please enter a valid amount');
-        return;
-      }
-      setModalStep('card');
-    } else if (modalStep === 'card') {
-      if (!cardForm.name || !cardForm.number || !cardForm.expiry || !cardForm.cvv) {
-        toast.error('Please fill in all credit card details');
-        return;
-      }
-      setModalStep('processing');
-      intentMutation.mutate({
-        amount: parseFloat(investForm.amount),
-        currency: investForm.currency,
-        recipientId: investForm.recipientId || undefined,
-        description: investForm.description,
-        type: 'investment',
-      });
+    if (!investForm.amount || parseFloat(investForm.amount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
     }
+    if (!cardForm.name || !cardForm.number || !cardForm.expiry || !cardForm.cvv) {
+      toast.error('Please fill in all credit card details');
+      return;
+    }
+    
+    setIsProcessing(true);
+    intentMutation.mutate({
+      amount: parseFloat(investForm.amount),
+      currency: investForm.currency,
+      recipientId: investForm.recipientId || undefined,
+      description: investForm.description,
+      type: 'investment',
+    });
   };
 
   const formatCardNumber = (value: string) => {
@@ -142,11 +137,11 @@ export const PaymentsPage: React.FC = () => {
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Wallet & Payments</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Payments & Ledger</h1>
           <p className="text-gray-600">Track and manage your platform balances</p>
         </div>
-        <Button leftIcon={<CreditCard size={18} />} onClick={() => { setModalStep('details'); setShowInvestModal(true); }}>
-          New Investment
+        <Button leftIcon={<CreditCard size={18} />} onClick={() => { setShowInvestModal(true); }}>
+          Make Investment
         </Button>
       </div>
 
@@ -154,7 +149,7 @@ export const PaymentsPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
           { label: 'Available Balance', value: balance.availableBalance, color: 'text-purple-600', icon: <DollarSign size={20} /> },
-          { label: 'Pending Clearances', value: balance.pendingBalance, color: 'text-amber-600', icon: <Clock size={20} /> },
+          { label: 'Pending', value: balance.pendingBalance, color: 'text-amber-600', icon: <Clock size={20} /> },
           { label: 'Total Invested', value: balance.totalInvested, color: 'text-gray-900', icon: <ArrowUpRight size={20} /> },
           { label: 'Total Received', value: balance.totalReceived, color: 'text-green-600', icon: <ArrowDownLeft size={20} /> }
         ].map((stat, i) => (
@@ -247,203 +242,146 @@ export const PaymentsPage: React.FC = () => {
       {/* Investment Modal */}
       {showInvestModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-up">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-up">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <CreditCard size={18} className="text-purple-500" />
-                <h2 className="text-xl font-bold text-gray-900">
-                  {modalStep === 'details' ? 'Make Investment' : modalStep === 'card' ? 'Card Details' : 'Processing Payment'}
-                </h2>
+                <h2 className="text-lg font-bold text-gray-900">Make Investment</h2>
               </div>
               <button onClick={() => setShowInvestModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <XCircle size={20} className="text-gray-400" />
               </button>
             </div>
 
-            {modalStep === 'processing' ? (
+            {isProcessing ? (
               <div className="p-12 text-center space-y-4">
                 <div className="w-12 h-12 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin mx-auto" />
                 <h3 className="font-bold text-gray-900 text-lg">Authorizing Card...</h3>
                 <p className="text-gray-500 text-sm">Please do not refresh. Securing sandbox tokens with Stripe.</p>
               </div>
             ) : (
-              <form onSubmit={handleInvestSubmit} className="p-6 space-y-4">
-                {modalStep === 'details' ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount *</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                          <input
-                            required
-                            type="number"
-                            min="1"
-                            step="0.01"
-                            value={investForm.amount}
-                            onChange={e => setInvestForm(f => ({ ...f, amount: e.target.value }))}
-                            placeholder="0.00"
-                            className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Currency</label>
-                        <select
-                          value={investForm.currency}
-                          onChange={e => setInvestForm(f => ({ ...f, currency: e.target.value }))}
-                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm bg-white"
-                        >
-                          <option value="usd">USD</option>
-                          <option value="eur">EUR</option>
-                          <option value="gbp">GBP</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Recipient User ID</label>
+              <form onSubmit={handleInvestSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount *</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
                       <input
-                        value={investForm.recipientId}
-                        onChange={e => setInvestForm(f => ({ ...f, recipientId: e.target.value }))}
-                        placeholder="Optional - paste user ID"
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                        required
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        value={investForm.amount}
+                        onChange={e => setInvestForm(f => ({ ...f, amount: e.target.value }))}
+                        placeholder="0.00"
+                        className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description / Memo</label>
-                      <textarea
-                        rows={2}
-                        value={investForm.description}
-                        onChange={e => setInvestForm(f => ({ ...f, description: e.target.value }))}
-                        placeholder="Investment purpose, deal notes..."
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm resize-none"
-                      />
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowInvestModal(false)}
-                        className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl transition-colors text-sm font-semibold flex items-center justify-center gap-2"
-                      >
-                        Continue <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  // Card details screen
-                  <div className="space-y-4">
-                    {/* Simulated Credit Card Graphic */}
-                    <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 rounded-2xl p-5 text-white shadow-lg space-y-6 relative overflow-hidden border border-white/10">
-                      <div className="flex justify-between items-start">
-                        <CreditCard size={32} className="text-white/80" />
-                        <span className="text-xs font-bold tracking-wider text-white/50">SANDBOX CARD</span>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs text-white/40 tracking-wider">CARD NUMBER</p>
-                        <p className="text-lg font-mono tracking-widest text-white/90">
-                          {cardForm.number || '•••• •••• •••• ••••'}
-                        </p>
-                      </div>
-                      <div className="flex justify-between items-end">
-                        <div className="space-y-0.5">
-                          <p className="text-[10px] text-white/40 tracking-wider">HOLDER NAME</p>
-                          <p className="text-sm font-medium tracking-wide uppercase truncate max-w-[180px]">
-                            {cardForm.name || 'John Doe'}
-                          </p>
-                        </div>
-                        <div className="flex gap-4">
-                          <div className="space-y-0.5">
-                            <p className="text-[10px] text-white/40 tracking-wider">EXPIRES</p>
-                            <p className="text-sm font-mono">{cardForm.expiry || 'MM/YY'}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <p className="text-[10px] text-white/40 tracking-wider">CVV</p>
-                            <p className="text-sm font-mono">{cardForm.cvv || '•••'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Inputs */}
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cardholder Name *</label>
-                        <input
-                          required
-                          value={cardForm.name}
-                          onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
-                          placeholder="e.g. Sarah Johnson"
-                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Card Number *</label>
-                        <div className="relative">
-                          <input
-                            required
-                            maxLength={19}
-                            value={cardForm.number}
-                            onChange={e => setCardForm(f => ({ ...f, number: formatCardNumber(e.target.value) }))}
-                            placeholder="4242 4242 4242 4242"
-                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
-                          />
-                          <ShieldCheck size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Expiry Date *</label>
-                          <input
-                            required
-                            maxLength={5}
-                            value={cardForm.expiry}
-                            onChange={e => setCardForm(f => ({ ...f, expiry: formatExpiry(e.target.value) }))}
-                            placeholder="MM/YY"
-                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">CVV / CVC *</label>
-                          <input
-                            required
-                            maxLength={4}
-                            value={cardForm.cvv}
-                            onChange={e => setCardForm(f => ({ ...f, cvv: e.target.value.replace(/\D/g,'') }))}
-                            placeholder="123"
-                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setModalStep('details')}
-                        className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
-                      >
-                        Back
-                      </button>
-                      <button
-                        type="submit"
-                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl transition-colors text-sm font-semibold flex items-center justify-center gap-2"
-                      >
-                        Confirm & Pay
-                      </button>
                     </div>
                   </div>
-                )}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Currency</label>
+                    <select
+                      value={investForm.currency}
+                      onChange={e => setInvestForm(f => ({ ...f, currency: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm bg-white"
+                    >
+                      <option value="usd">USD</option>
+                      <option value="eur">EUR</option>
+                      <option value="gbp">GBP</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Recipient User ID</label>
+                  <input
+                    value={investForm.recipientId}
+                    onChange={e => setInvestForm(f => ({ ...f, recipientId: e.target.value }))}
+                    placeholder="Optional - paste user ID"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description / Memo</label>
+                  <input
+                    value={investForm.description}
+                    onChange={e => setInvestForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Investment purpose, deal notes..."
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                  />
+                </div>
+
+                <div className="border-t border-gray-100 pt-4 space-y-3">
+                  <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Credit Card Information</span>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Cardholder Name *</label>
+                      <input
+                        required
+                        value={cardForm.name}
+                        onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
+                        placeholder="Sarah Johnson"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Card Number *</label>
+                      <input
+                        required
+                        maxLength={19}
+                        value={cardForm.number}
+                        onChange={e => setCardForm(f => ({ ...f, number: formatCardNumber(e.target.value) }))}
+                        placeholder="4242 4242 4242 4242"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Expiry Date *</label>
+                      <input
+                        required
+                        maxLength={5}
+                        value={cardForm.expiry}
+                        onChange={e => setCardForm(f => ({ ...f, expiry: formatExpiry(e.target.value) }))}
+                        placeholder="MM/YY"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">CVV *</label>
+                      <input
+                        required
+                        maxLength={4}
+                        value={cardForm.cvv}
+                        onChange={e => setCardForm(f => ({ ...f, cvv: e.target.value.replace(/\D/g,'') }))}
+                        placeholder="123"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-3 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowInvestModal(false)}
+                    className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={intentMutation.isPending || confirmMutation.isPending}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl transition-colors text-sm font-semibold flex items-center justify-center gap-2"
+                  >
+                    Confirm Investment
+                  </button>
+                </div>
               </form>
             )}
           </div>
