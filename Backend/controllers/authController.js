@@ -32,7 +32,7 @@ const sendTokenResponse = (user, statusCode, res, message = 'Authenticated succe
     httpOnly: true,
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   };
 
   res.cookie('refreshToken', refreshToken, cookieOptions);
@@ -71,7 +71,7 @@ export const register = asyncHandler(async (req, res) => {
     });
   }
 
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role = 'entrepreneur' } = req.body;
 
   // Check if user already exists
   const existingUser = await User.findOne({ email });

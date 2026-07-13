@@ -20,33 +20,44 @@ import { apiLimiter } from './middlewares/rateLimiter.js';
 
 const app = express();
 
-// 1. SECURITY MIDDLEWARE (OWASP Compliant configurations)
-app.use(helmet());
+// ─── 0. TRUST PROXY ──────────────────────────────────────────────────────────
+// Required on Render/Heroku/Railway — they sit behind a reverse proxy that sets
+// X-Forwarded-For. Without this, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// on every single request (including OPTIONS preflight), breaking CORS.
+app.set('trust proxy', 1);
 
-// Enable CORS — accepts Vercel production domain, any Vercel preview URL, and localhost
+// ─── 1. CORS — Must be FIRST so headers survive even if later middleware throws ─
+// Accepts: any *.vercel.app preview/prod URL, explicitly configured FRONTEND_URL,
+// and localhost for local development.
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:5173',
   'http://localhost:3000',
 ].filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (Postman, curl, mobile apps)
+    // Allow requests with no origin (Postman, curl, mobile apps, server-to-server)
     if (!origin) return callback(null, true);
-    // Allow any *.vercel.app subdomain (handles preview deployment hashes)
+    // Allow any *.vercel.app subdomain (handles all preview deployment hashes)
     if (origin.endsWith('.vercel.app')) return callback(null, true);
     // Allow explicitly configured origins
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS blocked: ${origin}`));
+    // Block everything else
+    callback(new Error(`CORS blocked origin: ${origin}`));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'token', 'X-Requested-With'],
-}));
+  optionsSuccessStatus: 200, // Some legacy browsers choke on 204
+};
 
-// Handle OPTIONS preflight for all routes BEFORE any other middleware
-app.options('*', cors());
+// Handle OPTIONS preflight for ALL routes — must come before helmet & rate limiter
+app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
+
+// ─── 2. SECURITY MIDDLEWARE ───────────────────────────────────────────────────
+app.use(helmet());
 
 // Parsers & limits to prevent payload size abuse
 app.use(express.json({ limit: '10mb' }));
@@ -62,15 +73,15 @@ app.use(hpp());
 // Response body compression
 app.use(compression());
 
-// Logger configuration
+// Logger
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'));
 }
 
-// 2. RATE LIMITER
+// ─── 3. RATE LIMITER ─────────────────────────────────────────────────────────
 app.use('/api', apiLimiter);
 
-// 3. API ENDPOINTS WIRE-UP
+// ─── 4. API ROUTES ───────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/meetings', meetingRoutes);
@@ -79,14 +90,17 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
 
-// Catch undefined router calls (404)
+// Health check endpoint (useful for Render uptime monitoring)
+app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
+// ─── 5. 404 CATCH-ALL ────────────────────────────────────────────────────────
 app.use('*', (req, res, next) => {
-  const err = new Error(`Requested endpoint resource '${req.originalUrl}' not found`);
+  const err = new Error(`Endpoint '${req.originalUrl}' not found`);
   err.statusCode = 404;
   next(err);
 });
 
-// 4. GLOBAL ERROR EXCEPTION HANDLER
+// ─── 6. GLOBAL ERROR HANDLER ─────────────────────────────────────────────────
 app.use(errorHandler);
 
 export default app;
