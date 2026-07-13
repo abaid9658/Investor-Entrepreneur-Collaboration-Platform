@@ -1,19 +1,49 @@
-import React, { useState } from 'react';
-import { User, Lock, Bell, Globe, Palette, CreditCard, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User as UserIcon, Lock, Bell, Palette, CreditCard, ShieldCheck, Loader2 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { useAuth } from '../../context/AuthContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getMyProfile, updateMyProfile } from '../../api/services/profileService';
 import toast from 'react-hot-toast';
 
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'appearance' | 'billing';
 
 export const SettingsPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch full profile info (with location, website, etc.)
+  const { data: profileResponse, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['myProfile'],
+    queryFn: getMyProfile,
+    enabled: !!user,
+  });
+
+  const profileData = profileResponse?.data;
+
+  // Form State
+  const [name, setName] = useState('');
+  const [bio, setBio] = useState('');
+  const [location, setLocation] = useState('');
+  const [website, setWebsite] = useState('');
+  const [linkedIn, setLinkedIn] = useState('');
+  
+  // Role-specific Entrepreneur fields
+  const [startupName, setStartupName] = useState('');
+  const [pitchSummary, setPitchSummary] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [foundedYear, setFoundedYear] = useState('');
+  const [teamSize, setTeamSize] = useState('');
+
+  // Role-specific Investor fields
+  const [minimumInvestment, setMinimumInvestment] = useState('');
+  const [maximumInvestment, setMaximumInvestment] = useState('');
 
   // Notifications State
   const [notifs, setNotifs] = useState({
@@ -25,7 +55,7 @@ export const SettingsPage: React.FC = () => {
   });
 
   // Security 2FA State
-  const [is2FA, setIs2FA] = useState(user?.isTwoFAEnabled || false);
+  const [is2FA, setIs2FA] = useState(false);
 
   // Password Input State
   const [pwd, setPwd] = useState({ current: '', newPwd: '', confirm: '' });
@@ -33,18 +63,66 @@ export const SettingsPage: React.FC = () => {
   // Appearance State
   const [theme, setTheme] = useState<'light' | 'dark' | 'glass'>('dark');
 
+  // Populate state when profile loads
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+      setBio(user.bio || '');
+      setIs2FA(user.isTwoFAEnabled || false);
+    }
+    if (profileData) {
+      setLocation(profileData.location || '');
+      setWebsite(profileData.website || '');
+      setLinkedIn(profileData.linkedIn || '');
+      
+      if (user?.role === 'entrepreneur') {
+        setStartupName(profileData.startupName || '');
+        setPitchSummary(profileData.pitchSummary || '');
+        setIndustry(profileData.industry || '');
+        setFoundedYear(profileData.foundedYear ? String(profileData.foundedYear) : '');
+        setTeamSize(profileData.teamSize ? String(profileData.teamSize) : '');
+      } else if (user?.role === 'investor') {
+        setMinimumInvestment(profileData.minimumInvestment ? String(profileData.minimumInvestment) : '');
+        setMaximumInvestment(profileData.maximumInvestment ? String(profileData.maximumInvestment) : '');
+      }
+    }
+  }, [profileData, user]);
+
   if (!user) return null;
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      const payload: any = {
+        name,
+        bio,
+        location,
+        website,
+        linkedIn,
+      };
+
+      if (user.role === 'entrepreneur') {
+        payload.startupName = startupName;
+        payload.pitchSummary = pitchSummary;
+        payload.industry = industry;
+        if (foundedYear) payload.foundedYear = Number(foundedYear);
+        if (teamSize) payload.teamSize = Number(teamSize);
+      } else if (user.role === 'investor') {
+        if (minimumInvestment) payload.minimumInvestment = Number(minimumInvestment);
+        if (maximumInvestment) payload.maximumInvestment = Number(maximumInvestment);
+      }
+
+      await updateProfile(user.id, payload);
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
+    } catch {
+      // Errors handled by toast in AuthContext
+    } finally {
       setIsSaving(false);
-      toast.success('Profile preferences updated!');
-    }, 800);
+    }
   };
 
-  const handleUpdatePassword = (e: React.FormEvent) => {
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pwd.current || !pwd.newPwd || !pwd.confirm) {
       toast.error('Please fill in all password fields');
@@ -55,20 +133,28 @@ export const SettingsPage: React.FC = () => {
       return;
     }
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await updateProfile(user.id, { password: pwd.newPwd } as any);
       setPwd({ current: '', newPwd: '', confirm: '' });
-      toast.success('Account password updated successfully!');
-    }, 1000);
+    } catch {
+      // Errors handled by toast in AuthContext
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const toggle2FA = () => {
-    setIs2FA(!is2FA);
-    toast.success(!is2FA ? 'Two-Factor Authentication (2FA) enabled!' : '2FA disabled.');
+  const toggle2FA = async () => {
+    const targetState = !is2FA;
+    setIs2FA(targetState);
+    try {
+      await updateProfile(user.id, { isTwoFAEnabled: targetState } as any);
+    } catch {
+      setIs2FA(!targetState); // rollback on error
+    }
   };
 
   const tabItems = [
-    { id: 'profile', label: 'Profile', icon: <User size={18} /> },
+    { id: 'profile', label: 'Profile', icon: <UserIcon size={18} /> },
     { id: 'security', label: 'Security', icon: <Lock size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={18} /> },
@@ -114,45 +200,83 @@ export const SettingsPage: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-0.5">Customize your personal profile credentials</p>
               </CardHeader>
               <CardBody>
-                <form onSubmit={handleSaveProfile} className="space-y-6">
-                  <div className="flex items-center gap-6">
-                    <Avatar src={user.avatarUrl} alt={user.name} size="xl" />
-                    <div>
-                      <Button type="button" variant="outline" size="sm">
-                        Change Photo
-                      </Button>
-                      <p className="mt-2 text-xs text-gray-400">
-                        JPG, GIF or PNG. Maximum size of 800KB
-                      </p>
+                {isProfileLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="animate-spin text-purple-600 mr-2" size={24} />
+                    <span className="text-sm text-gray-500">Loading settings...</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveProfile} className="space-y-6">
+                    <div className="flex items-center gap-6">
+                      <Avatar src={user.avatarUrl} alt={user.name} size="xl" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{user.name}</p>
+                        <p className="text-xs text-gray-400 mt-1">Role: <span className="capitalize font-medium text-purple-600">{user.role}</span></p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Input label="Full Name" defaultValue={user.name} required />
-                    <Input label="Email" type="email" defaultValue={user.email} required disabled />
-                    <Input label="Role Type" value={user.role} disabled />
-                    <Input label="Location" defaultValue="San Francisco, CA" />
-                  </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <Input label="Full Name" value={name} onChange={e => setName(e.target.value)} required />
+                      <Input label="Email" type="email" value={user.email} required disabled />
+                      <Input label="Location" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. San Francisco, CA" />
+                      <Input label="Website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="e.g. https://mycompany.com" />
+                      <Input label="LinkedIn" value={linkedIn} onChange={e => setLinkedIn(e.target.value)} placeholder="e.g. https://linkedin.com/in/username" />
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                      Bio Description
-                    </label>
-                    <textarea
-                      className="w-full rounded-xl border border-gray-200 shadow-sm p-4 text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"
-                      rows={4}
-                      defaultValue={user.bio || ''}
-                      placeholder="Write something about yourself or your focus..."
-                    ></textarea>
-                  </div>
+                    {/* Role-specific Entrepreneur fields */}
+                    {user.role === 'entrepreneur' && (
+                      <div className="border-t border-gray-100 pt-6 mt-6 space-y-6">
+                        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Startup Details</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <Input label="Startup Name" value={startupName} onChange={e => setStartupName(e.target.value)} placeholder="e.g. TechWave AI" />
+                          <Input label="Industry" value={industry} onChange={e => setIndustry(e.target.value)} placeholder="e.g. FinTech, SaaS" />
+                          <Input label="Founded Year" type="number" value={foundedYear} onChange={e => setFoundedYear(e.target.value)} placeholder="e.g. 2022" />
+                          <Input label="Team Size" type="number" value={teamSize} onChange={e => setTeamSize(e.target.value)} placeholder="e.g. 15" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Startup Pitch Summary</label>
+                          <textarea
+                            className="w-full rounded-xl border border-gray-200 shadow-sm p-4 text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all resize-none"
+                            rows={3}
+                            value={pitchSummary}
+                            onChange={e => setPitchSummary(e.target.value)}
+                            placeholder="Briefly pitch your startup idea..."
+                          />
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-                    <Button type="button" variant="outline">Reset</Button>
-                    <Button type="submit" disabled={isSaving}>
-                      {isSaving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </div>
-                </form>
+                    {/* Role-specific Investor fields */}
+                    {user.role === 'investor' && (
+                      <div className="border-t border-gray-100 pt-6 mt-6 space-y-6">
+                        <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Investment Criteria</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <Input label="Minimum Investment ($)" type="number" value={minimumInvestment} onChange={e => setMinimumInvestment(e.target.value)} placeholder="e.g. 50000" />
+                          <Input label="Maximum Investment ($)" type="number" value={maximumInvestment} onChange={e => setMaximumInvestment(e.target.value)} placeholder="e.g. 500000" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                        Bio Description
+                      </label>
+                      <textarea
+                        className="w-full rounded-xl border border-gray-200 shadow-sm p-4 text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all resize-none"
+                        rows={4}
+                        value={bio}
+                        onChange={e => setBio(e.target.value)}
+                        placeholder="Write something about yourself or your focus..."
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
+                      <Button type="submit" disabled={isSaving}>
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </CardBody>
             </Card>
           )}
@@ -240,7 +364,7 @@ export const SettingsPage: React.FC = () => {
                         type="checkbox"
                         checked={(notifs as any)[item.key]}
                         onChange={() => setNotifs(n => ({ ...n, [item.key]: !(n as any)[item.key] }))}
-                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-white/10"
                       />
                     </div>
                   ))}
@@ -261,7 +385,7 @@ export const SettingsPage: React.FC = () => {
                         type="checkbox"
                         checked={(notifs as any)[item.key]}
                         onChange={() => setNotifs(n => ({ ...n, [item.key]: !(n as any)[item.key] }))}
-                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-white/10"
                       />
                     </div>
                   ))}
@@ -279,7 +403,7 @@ export const SettingsPage: React.FC = () => {
               <CardBody className="space-y-6">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900 mb-4">Choose Dashboard Theme</h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {[
                       { id: 'light', name: 'Light Mode', style: 'bg-white border-gray-200 text-gray-800' },
                       { id: 'dark', name: 'Dark Mode (Premium)', style: 'bg-slate-900 border-purple-950 text-white' },
@@ -289,8 +413,8 @@ export const SettingsPage: React.FC = () => {
                         key={t.id}
                         type="button"
                         onClick={() => { setTheme(t.id as any); toast.success(`Switched to ${t.name}`); }}
-                        className={`p-5 rounded-2xl border-2 text-left transition-all ${
-                          theme === t.id ? 'ring-2 ring-purple-500 scale-[1.02] border-purple-500' : 'border-gray-200'
+                        className={`p-5 rounded-2xl border text-left transition-all ${
+                          theme === t.id ? 'ring-2 ring-purple-500 scale-[1.02] border-purple-500' : 'border-gray-200 hover:border-gray-300'
                         } ${t.style}`}
                       >
                         <span className="text-sm font-bold block">{t.name}</span>
@@ -310,7 +434,7 @@ export const SettingsPage: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-0.5">Manage premium plan subscriptions and Stripe billing portals</p>
               </CardHeader>
               <CardBody className="space-y-6">
-                <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 rounded-2xl p-6 text-white flex flex-wrap justify-between items-center gap-4 border border-white/10">
+                <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white flex flex-wrap justify-between items-center gap-4 border border-purple-800/30">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
                       <Badge variant="accent">PRO MEMBER</Badge>
@@ -319,7 +443,7 @@ export const SettingsPage: React.FC = () => {
                     <h3 className="text-xl font-bold text-white">Nexus Gold Investor License</h3>
                     <p className="text-xs text-white/50">Unlimited collaboration requests, deals, and video rooms</p>
                   </div>
-                  <Button variant="accent">Manage with Stripe</Button>
+                  <Button variant="accent" onClick={() => toast.success('Redirecting to Stripe Billing Portal...')}>Manage with Stripe</Button>
                 </div>
 
                 <div className="pt-2">

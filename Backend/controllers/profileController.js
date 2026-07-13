@@ -60,19 +60,26 @@ export const getMyProfile = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Update profile info
-// @route   PUT /api/profiles/me
-// @access  Private
 export const updateMyProfile = asyncHandler(async (req, res) => {
-  const { name, bio, ...profileFields } = req.body;
+  const { name, bio, isTwoFAEnabled, password, ...profileFields } = req.body;
 
   // Handle core user table updates
   const userUpdates = {};
   if (name) userUpdates.name = name;
   if (bio !== undefined) userUpdates.bio = bio;
+  if (isTwoFAEnabled !== undefined) userUpdates.isTwoFAEnabled = isTwoFAEnabled;
 
   if (Object.keys(userUpdates).length > 0) {
     await User.findByIdAndUpdate(req.user._id, userUpdates);
+  }
+
+  // Handle password updates (requires find and save so the pre-save hook runs to hash it)
+  if (password) {
+    const userDoc = await User.findById(req.user._id);
+    if (userDoc) {
+      userDoc.password = password;
+      await userDoc.save();
+    }
   }
 
   // Handle extended details in profile schema
