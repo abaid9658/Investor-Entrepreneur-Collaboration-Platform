@@ -12,12 +12,20 @@ const pwdRules = [
   { label: 'At least one number (0–9)', test: (p: string) => /\d/.test(p) },
 ];
 
+// Only entrepreneur & investor can register (admin is seeded)
+type RegisterRole = 'entrepreneur' | 'investor';
+
+const roleData: Record<RegisterRole, { label: string; desc: string; icon: string }> = {
+  entrepreneur: { label: 'Entrepreneur', desc: 'Share your startup and find investors', icon: '🚀' },
+  investor: { label: 'Investor', desc: 'Discover startups and invest smart', icon: '💼' },
+};
+
 export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('entrepreneur');
+  const [role, setRole] = useState<RegisterRole>('entrepreneur');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,18 +58,13 @@ export const RegisterPage: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      await register(name.trim(), email.toLowerCase(), password, role);
+      await register(name.trim(), email.toLowerCase(), password, role as UserRole);
       navigate(role === 'investor' ? '/dashboard/investor' : '/dashboard/entrepreneur');
     } catch {
       // Errors handled in AuthContext via toast
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const roleData = {
-    entrepreneur: { label: 'Entrepreneur', desc: 'Share your startup and find investors', icon: '🚀' },
-    investor: { label: 'Investor', desc: 'Discover startups and invest smart', icon: '💼' },
   };
 
   return (
@@ -79,7 +82,7 @@ export const RegisterPage: React.FC = () => {
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
           {/* Role Selection */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            {(Object.entries(roleData) as [UserRole, typeof roleData.entrepreneur][]).map(([r, data]) => (
+            {(Object.entries(roleData) as [RegisterRole, typeof roleData.entrepreneur][]).map(([r, data]) => (
               <button
                 key={r}
                 type="button"

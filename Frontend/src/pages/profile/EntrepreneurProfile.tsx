@@ -14,14 +14,16 @@ export const EntrepreneurProfile: React.FC = () => {
   const { user: currentUser } = useAuth();
 
   // Fetch real profile from backend
-  const { data: profileResponse, isLoading, error } = useQuery({
+  const { data: profileResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['profile', id],
     queryFn: () => getProfileById(id || ''),
-    enabled: !!id
+    enabled: !!id,
+    retry: 1,
   });
 
   const profile = profileResponse?.data;
-  const isCurrentUser = currentUser?.id === profile?.user?._id;
+  const userDoc = profile?.user;
+  const isCurrentUser = currentUser?.id === (userDoc?._id?.toString() || userDoc?.id);
   const isInvestor = currentUser?.role === 'investor';
 
   if (isLoading) {
@@ -32,32 +34,57 @@ export const EntrepreneurProfile: React.FC = () => {
     );
   }
 
-  if (error || !profile || profile.user?.role !== 'entrepreneur') {
+  if (error || !profile || !userDoc) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Entrepreneur not found</h2>
-        <p className="text-gray-600 mt-2">The entrepreneur profile you're looking for doesn't exist or has been removed.</p>
-        <Link to="/dashboard/investor">
-          <Button variant="outline" className="mt-4">Back to Dashboard</Button>
+      <div className="text-center py-16 px-4">
+        <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Building2 className="text-purple-500" size={28} />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Entrepreneur not found</h2>
+        <p className="text-gray-500 max-w-sm mx-auto mb-6">
+          This entrepreneur profile doesn't exist yet or may have been removed. If you just registered, try refreshing.
+        </p>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors"
+          >
+            Retry
+          </button>
+          <Link to="/entrepreneurs">
+            <Button variant="outline">Browse Entrepreneurs</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (userDoc.role && userDoc.role !== 'entrepreneur') {
+    return (
+      <div className="text-center py-16 px-4">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Not an entrepreneur profile</h2>
+        <p className="text-gray-500 mb-6">This user is registered as a {userDoc.role}.</p>
+        <Link to="/entrepreneurs">
+          <Button variant="outline">Browse Entrepreneurs</Button>
         </Link>
       </div>
     );
   }
 
   const entrepreneur = {
-    id: profile.user._id,
-    name: profile.user.name,
-    email: profile.user.email,
-    avatarUrl: profile.user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.user.name)}&background=random`,
-    bio: profile.user.bio || 'No bio provided.',
+    id: userDoc._id || userDoc.id,
+    name: userDoc.name || 'Unknown Entrepreneur',
+    email: userDoc.email || '',
+    avatarUrl: userDoc.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc.name || 'E')}&background=random`,
+    bio: userDoc.bio || profile.bio || 'No bio provided yet.',
     startupName: profile.startupName || 'Unnamed Startup',
     pitchSummary: profile.pitchSummary || 'No pitch summary available.',
     industry: profile.industry || 'Technology',
-    location: profile.location || 'San Francisco, CA',
-    foundedYear: profile.foundedYear || 2022,
+    location: profile.location || 'Location not specified',
+    foundedYear: profile.foundedYear || new Date().getFullYear(),
     teamSize: profile.teamSize || 1,
-    fundingNeeded: profile.minimumInvestment ? `$${profile.minimumInvestment.toLocaleString()}` : '$150,000',
-    isOnline: profile.user.isOnline || false
+    fundingNeeded: profile.minimumInvestment ? `$${profile.minimumInvestment.toLocaleString()}` : 'Seeking Investment',
+    isOnline: userDoc.isOnline || false
   };
 
   const hasRequestedCollaboration = false; // Simplified for UI representation

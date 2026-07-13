@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { MessageCircle, Building2, MapPin, UserCircle, BarChart3, Briefcase } from 'lucide-react';
+import { MessageCircle, Building2, MapPin, UserCircle, BarChart3, Briefcase, RefreshCw } from 'lucide-react';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader } from '../../components/ui/Card';
@@ -14,13 +14,16 @@ export const InvestorProfile: React.FC = () => {
   const { user: currentUser } = useAuth();
 
   // Fetch real profile from backend
-  const { data: profileResponse, isLoading, error } = useQuery({
+  const { data: profileResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['profile', id],
     queryFn: () => getProfileById(id || ''),
-    enabled: !!id
+    enabled: !!id,
+    retry: 1,
   });
 
+  // Backend returns { success, data: profileDoc } where profileDoc.user is populated
   const profile = profileResponse?.data;
+  const userDoc = profile?.user;
 
   if (isLoading) {
     return (
@@ -30,34 +33,62 @@ export const InvestorProfile: React.FC = () => {
     );
   }
 
-  if (error || !profile || profile.user?.role !== 'investor') {
+  if (error || !profile || !userDoc) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Investor not found</h2>
-        <p className="text-gray-600 mt-2">The investor profile you're looking for doesn't exist or has been removed.</p>
-        <Link to="/dashboard/entrepreneur">
-          <Button variant="outline" className="mt-4">Back to Dashboard</Button>
+      <div className="text-center py-16 px-4">
+        <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Briefcase className="text-purple-500" size={28} />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Investor not found</h2>
+        <p className="text-gray-500 max-w-sm mx-auto mb-6">
+          This investor profile doesn't exist yet or may have been removed. If you just registered, try refreshing.
+        </p>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors"
+          >
+            <RefreshCw size={16} /> Retry
+          </button>
+          <Link to="/investors">
+            <Button variant="outline">Browse Investors</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // If somehow the user is not an investor, show a helpful redirect
+  if (userDoc.role && userDoc.role !== 'investor') {
+    return (
+      <div className="text-center py-16 px-4">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Not an investor profile</h2>
+        <p className="text-gray-500 mb-6">This user is registered as a {userDoc.role}.</p>
+        <Link to="/investors">
+          <Button variant="outline">Browse Investors</Button>
         </Link>
       </div>
     );
   }
 
-  const isCurrentUser = currentUser?.id === profile.user._id;
+  const isCurrentUser = currentUser?.id === (userDoc._id?.toString() || userDoc.id);
 
   const investor = {
-    id: profile.user._id,
-    name: profile.user.name,
-    email: profile.user.email,
-    avatarUrl: profile.user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.user.name)}&background=random`,
-    bio: profile.user.bio || 'No bio provided.',
-    investmentInterests: profile.investmentInterests || ['FinTech', 'SaaS'],
-    investmentStage: profile.investmentStage || ['Seed', 'Series A'],
+    id: userDoc._id || userDoc.id,
+    name: userDoc.name || 'Unknown Investor',
+    email: userDoc.email || '',
+    avatarUrl: userDoc.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc.name || 'I')}&background=random`,
+    bio: userDoc.bio || profile.bio || 'This investor has not added a bio yet.',
+    investmentInterests: profile.investmentInterests?.length ? profile.investmentInterests : ['Technology', 'FinTech', 'SaaS'],
+    investmentStage: profile.investmentStage?.length ? profile.investmentStage : ['Seed', 'Series A'],
     portfolioCompanies: profile.portfolioCompanies || [],
     totalInvestments: profile.totalInvestmentsCount || 0,
-    minimumInvestment: profile.minimumInvestment ? `$${profile.minimumInvestment.toLocaleString()}` : '$100K',
-    maximumInvestment: profile.maximumInvestment ? `$${profile.maximumInvestment.toLocaleString()}` : '$1M',
-    location: profile.location || 'San Francisco, CA',
-    isOnline: profile.user.isOnline || false
+    minimumInvestment: profile.minimumInvestment ? `$${profile.minimumInvestment.toLocaleString()}` : 'Negotiable',
+    maximumInvestment: profile.maximumInvestment ? `$${profile.maximumInvestment.toLocaleString()}` : 'Negotiable',
+    location: profile.location || userDoc.location || 'Location not specified',
+    isOnline: userDoc.isOnline || false,
+    website: profile.website || '',
+    linkedIn: profile.linkedIn || '',
   };
 
   return (
@@ -78,7 +109,7 @@ export const InvestorProfile: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900">{investor.name}</h1>
               <p className="text-gray-600 flex items-center justify-center sm:justify-start mt-1">
                 <Building2 size={16} className="mr-1" />
-                Investor • {investor.totalInvestments} investments
+                Investor{investor.totalInvestments > 0 ? ` • ${investor.totalInvestments} investments` : ''}
               </p>
               
               <div className="flex flex-wrap gap-2 justify-center sm:justify-start mt-3">
@@ -86,19 +117,17 @@ export const InvestorProfile: React.FC = () => {
                   <MapPin size={14} className="mr-1" />
                   {investor.location}
                 </Badge>
-                {investor.investmentStage.map((stage, index) => (
+                {investor.investmentStage.slice(0, 3).map((stage, index) => (
                   <Badge key={index} variant="secondary" size="sm">{stage}</Badge>
                 ))}
               </div>
             </div>
           </div>
           
-          <div className="mt-6 sm:mt-0 flex justify-center sm:justify-end">
+          <div className="mt-6 sm:mt-0 flex justify-center sm:justify-end gap-2 flex-wrap">
             {!isCurrentUser && (
               <Link to={`/chat/${investor.id}`}>
-                <Button
-                  leftIcon={<MessageCircle size={18} />}
-                >
+                <Button leftIcon={<MessageCircle size={18} />}>
                   Message Investor
                 </Button>
               </Link>
@@ -139,7 +168,7 @@ export const InvestorProfile: React.FC = () => {
             <CardBody>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Target Industries</h3>
+                  <h3 className="text-sm font-medium text-gray-500 mb-3">Target Industries</h3>
                   <div className="flex flex-wrap gap-2">
                     {investor.investmentInterests.map((interest, index) => (
                       <Badge key={index} variant="primary">{interest}</Badge>
@@ -148,11 +177,38 @@ export const InvestorProfile: React.FC = () => {
                 </div>
                 
                 <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-3">Investment Stages</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {investor.investmentStage.map((stage, index) => (
+                      <Badge key={index} variant="secondary">{stage}</Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Investment Range</h3>
                   <p className="text-lg font-semibold text-gray-900">
-                    {investor.minimumInvestment} - {investor.maximumInvestment}
+                    {investor.minimumInvestment} — {investor.maximumInvestment}
                   </p>
                 </div>
+
+                {(investor.website || investor.linkedIn) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Links</h3>
+                    <div className="space-y-1">
+                      {investor.website && (
+                        <a href={investor.website} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline text-sm block">
+                          🌐 Website
+                        </a>
+                      )}
+                      {investor.linkedIn && (
+                        <a href={investor.linkedIn} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline text-sm block">
+                          💼 LinkedIn
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardBody>
           </Card>
@@ -200,11 +256,36 @@ export const InvestorProfile: React.FC = () => {
                     <BarChart3 size={16} className="mr-2" />
                     <span>Deal Flow Rate</span>
                   </div>
-                  <span className="font-semibold text-gray-900">High</span>
+                  <span className="font-semibold text-gray-900">
+                    {investor.totalInvestments > 5 ? 'High' : investor.totalInvestments > 2 ? 'Medium' : 'Active'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <MapPin size={16} className="mr-2" />
+                    <span>Location</span>
+                  </div>
+                  <span className="font-semibold text-gray-900 text-right text-sm">{investor.location}</span>
                 </div>
               </div>
             </CardBody>
           </Card>
+
+          {/* Contact Card */}
+          {!isCurrentUser && (
+            <Card>
+              <CardBody className="text-center p-6">
+                <h3 className="font-semibold text-gray-900 mb-2">Interested in partnering?</h3>
+                <p className="text-gray-500 text-sm mb-4">Send a message to start a conversation with {investor.name.split(' ')[0]}.</p>
+                <Link to={`/chat/${investor.id}`} className="block">
+                  <Button leftIcon={<MessageCircle size={16} />} className="w-full">
+                    Send Message
+                  </Button>
+                </Link>
+              </CardBody>
+            </Card>
+          )}
         </div>
       </div>
     </div>
