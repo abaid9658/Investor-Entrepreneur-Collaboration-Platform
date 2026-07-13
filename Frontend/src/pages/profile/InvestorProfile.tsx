@@ -117,7 +117,7 @@ export const InvestorProfile: React.FC = () => {
                   <MapPin size={14} className="mr-1" />
                   {investor.location}
                 </Badge>
-                {investor.investmentStage.slice(0, 3).map((stage, index) => (
+                {investor.investmentStage.slice(0, 3).map((stage: string, index: number) => (
                   <Badge key={index} variant="secondary" size="sm">{stage}</Badge>
                 ))}
               </div>
@@ -170,7 +170,7 @@ export const InvestorProfile: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-3">Target Industries</h3>
                   <div className="flex flex-wrap gap-2">
-                    {investor.investmentInterests.map((interest, index) => (
+                    {investor.investmentInterests.map((interest: string, index: number) => (
                       <Badge key={index} variant="primary">{interest}</Badge>
                     ))}
                   </div>
@@ -179,7 +179,7 @@ export const InvestorProfile: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-3">Investment Stages</h3>
                   <div className="flex flex-wrap gap-2">
-                    {investor.investmentStage.map((stage, index) => (
+                    {investor.investmentStage.map((stage: string, index: number) => (
                       <Badge key={index} variant="secondary">{stage}</Badge>
                     ))}
                   </div>
