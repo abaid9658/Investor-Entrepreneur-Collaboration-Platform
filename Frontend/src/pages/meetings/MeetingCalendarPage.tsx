@@ -4,7 +4,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { X, Plus, Calendar, Clock, User, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
+import { X, Plus, Calendar, Clock, User, CheckCircle, XCircle, RotateCcw, Video } from 'lucide-react';
 import {
   getMyMeetings,
   createMeeting,
@@ -13,6 +13,8 @@ import {
 } from '../../api/services/meetingService';
 import { getProfiles } from '../../api/services/profileService';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -25,7 +27,9 @@ const STATUS_COLORS: Record<string, string> = {
 
 export const MeetingCalendarPage: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
   const [form, setForm] = useState({
@@ -62,10 +66,20 @@ export const MeetingCalendarPage: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: createMeeting,
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast.success('Meeting scheduled!');
       queryClient.invalidateQueries({ queryKey: ['meetings'] });
       setShowModal(false);
+      // Emit real-time meeting invite notification to attendee
+      const meeting = res?.data;
+      if (socket && meeting && form.attendee) {
+        socket.emit('meeting-invite', {
+          attendeeId: form.attendee,
+          meetingTitle: form.title,
+          meetingId: meeting._id,
+          startTime: form.startTime,
+        });
+      }
       setForm({ title: '', description: '', startTime: '', endTime: '', attendee: '' });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to schedule meeting'),
@@ -73,9 +87,33 @@ export const MeetingCalendarPage: React.FC = () => {
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateMeetingStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Meeting updated!');
       queryClient.invalidateQueries({ queryKey: ['meetings'] });
+      // Notify host of acceptance/rejection in real-time
+      if (socket && selectedMeeting?.host?._id) {
+        socket.emit('meeting-status-update', {
+          hostId: selectedMeeting.host._id,
+          meetingId: selectedMeeting._id,
+          status: variables.status,
+          meetingTitle: selectedMeeting.title,
+        });
+      }
+      // If accepted, generate a room and show join button
+      if (variables.status === 'accepted' && selectedMeeting) {
+        const roomId = `meeting_${selectedMeeting._id}`;
+        toast((t) => (
+          <div className="flex flex-col gap-2">
+            <span className="font-semibold">Meeting accepted! 🎉</span>
+            <button
+              onClick={() => { toast.dismiss(t.id); navigate(`/room/${roomId}`); }}
+              className="bg-purple-600 text-white rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-purple-700 transition-colors"
+            >
+              🎥 Join Video Call
+            </button>
+          </div>
+        ), { duration: 15000 });
+      }
       setSelectedMeeting(null);
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Update failed'),
@@ -286,7 +324,16 @@ export const MeetingCalendarPage: React.FC = () => {
                     {selectedMeeting.status}
                   </span>
                 </div>
-                {selectedMeeting.meetingLink && (
+                {/* Join Call button — always available for accepted meetings */}
+                {selectedMeeting.status === 'accepted' && (
+                  <button
+                    onClick={() => navigate(`/room/meeting_${selectedMeeting._id}`)}
+                    className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors w-full justify-center"
+                  >
+                    <Video size={16} /> Join Video Call
+                  </button>
+                )}
+                {selectedMeeting.meetingLink && selectedMeeting.status !== 'accepted' && (
                   <a
                     href={selectedMeeting.meetingLink}
                     target="_blank"

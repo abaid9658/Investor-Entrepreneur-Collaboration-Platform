@@ -64,6 +64,72 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       s.on('connect_error', (err) => {
         console.error('Socket connection error:', err.message);
       });
+
+      // Incoming call notification — ring globally regardless of current page
+      s.on('incoming-call', (data: { callerId: string; callerName: string; callerAvatar: string; roomId: string; callType: string }) => {
+        toast(
+          (t) => (
+            <div className="flex flex-col gap-2 min-w-[240px]">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📞</span>
+                <div>
+                  <p className="font-semibold text-gray-900">{data.callerName} is calling...</p>
+                  <p className="text-xs text-gray-500">{data.callType === 'video' ? '🎥 Video Call' : '🎤 Audio Call'}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    s?.emit('call-response', { callerId: data.callerId, roomId: data.roomId, accepted: true });
+                    window.location.href = `/room/${data.roomId}`;
+                  }}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white text-sm font-medium py-1.5 rounded-lg transition-colors"
+                >
+                  ✅ Accept
+                </button>
+                <button
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    s?.emit('call-response', { callerId: data.callerId, roomId: data.roomId, accepted: false });
+                  }}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-1.5 rounded-lg transition-colors"
+                >
+                  ❌ Decline
+                </button>
+              </div>
+            </div>
+          ),
+          { duration: 30000, icon: undefined }
+        );
+      });
+
+      // Call accepted — navigate to room
+      s.on('call-accepted', (data: { calleeName: string; roomId: string }) => {
+        toast.success(`${data.calleeName} accepted the call!`);
+      });
+
+      // Call rejected
+      s.on('call-rejected', (data: { calleeName: string }) => {
+        toast.error(`${data.calleeName} declined the call`);
+      });
+
+      // Meeting notification
+      s.on('meeting-notification', (data: { type: string; message: string; meetingId?: string; startTime?: string }) => {
+        toast(
+          (t) => (
+            <div className="flex flex-col gap-1" onClick={() => { toast.dismiss(t.id); window.location.href = '/meetings'; }}>
+              <span className="font-semibold text-gray-900">📅 {data.type === 'new_meeting' ? 'New Meeting Invite' : 'Meeting Update'}</span>
+              <span className="text-sm text-gray-600">{data.message}</span>
+              {data.startTime && (
+                <span className="text-xs text-gray-400">{new Date(data.startTime).toLocaleString()}</span>
+              )}
+              <span className="text-xs text-purple-600 font-medium cursor-pointer mt-1">Click to view meetings →</span>
+            </div>
+          ),
+          { icon: '📅', duration: 8000 }
+        );
+      });
     }
 
     return () => {

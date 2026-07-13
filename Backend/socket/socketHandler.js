@@ -152,6 +152,72 @@ export const socketHandler = (io) => {
       logger.info(`Socket User ${userId} left Video Room ${roomId}`);
     });
 
+    // 3. CALL INVITE / REAL-TIME NOTIFICATIONS
+    
+    // Caller initiates a call to another user
+    socket.on('call-invite', (data) => {
+      const { calleeId, roomId, callType = 'video', callerName, callerAvatar } = data;
+      const calleeSocketId = onlineUsers.get(calleeId);
+      if (calleeSocketId) {
+        io.to(calleeSocketId).emit('incoming-call', {
+          callerId: userId,
+          callerName: callerName || socket.user.name,
+          callerAvatar: callerAvatar || '',
+          roomId,
+          callType
+        });
+        logger.info(`Call invite sent from ${userId} to ${calleeId}, room ${roomId}`);
+      } else {
+        // Callee offline — notify caller
+        socket.emit('call-response', { accepted: false, reason: 'User is offline' });
+      }
+    });
+
+    // Callee responds to the call invite
+    socket.on('call-response', (data) => {
+      const { callerId, roomId, accepted } = data;
+      const callerSocketId = onlineUsers.get(callerId);
+      if (callerSocketId) {
+        io.to(callerSocketId).emit(accepted ? 'call-accepted' : 'call-rejected', {
+          calleeId: userId,
+          calleeName: socket.user.name,
+          roomId,
+          accepted
+        });
+      }
+    });
+
+    // Real-time meeting invite notification
+    socket.on('meeting-invite', (data) => {
+      const { attendeeId, meetingTitle, meetingId, startTime } = data;
+      const attendeeSocketId = onlineUsers.get(attendeeId);
+      if (attendeeSocketId) {
+        io.to(attendeeSocketId).emit('meeting-notification', {
+          type: 'new_meeting',
+          message: `${socket.user.name} invited you to: ${meetingTitle}`,
+          meetingId,
+          startTime,
+          hostId: userId,
+          hostName: socket.user.name
+        });
+      }
+    });
+
+    // Meeting status update notification (accept/reject broadcast to host)
+    socket.on('meeting-status-update', (data) => {
+      const { hostId, meetingId, status, meetingTitle } = data;
+      const hostSocketId = onlineUsers.get(hostId);
+      if (hostSocketId) {
+        io.to(hostSocketId).emit('meeting-notification', {
+          type: 'status_update',
+          message: `${socket.user.name} ${status} your meeting: ${meetingTitle}`,
+          meetingId,
+          status,
+          attendeeId: userId
+        });
+      }
+    });
+
     // 3. DISCONNECT CLEANUP
     socket.on('disconnect', () => {
       onlineUsers.delete(userId);

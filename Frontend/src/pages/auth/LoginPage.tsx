@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, LogIn, Key, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { verify2FALogin } from '../../api/services/authService';
@@ -17,6 +17,7 @@ export const LoginPage: React.FC = () => {
   const [show2FA, setShow2FA] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [twoFAEmail, setTwoFAEmail] = useState('');
+  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
 
   const { login } = useAuth();
   const dispatch = useDispatch();
@@ -26,7 +27,13 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const loggedUser = await login(email, password, role);
+      // Automatically detect admin credentials and override role
+      let selectedRole = role;
+      if (email.toLowerCase().trim() === 'admin@nexus.com') {
+        selectedRole = 'admin';
+      }
+      
+      const loggedUser = await login(email.trim(), password, selectedRole);
       if (loggedUser?.role === 'admin') {
         navigate('/dashboard/admin');
       } else {
@@ -62,6 +69,13 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fillCredentials = (demoEmail: string, demoPass: string, demoRole: UserRole) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setRole(demoRole);
+    toast.success(`Prefilled: ${demoEmail}`);
   };
 
   if (show2FA) {
@@ -116,9 +130,9 @@ export const LoginPage: React.FC = () => {
 
         {/* Card */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
-          {/* Role Toggle */}
+          {/* Role Toggle - Only Entrepreneur and Investor shown as requested */}
           <div className="flex bg-white/10 rounded-xl p-1 mb-6">
-            {(['entrepreneur', 'investor', 'admin'] as UserRole[]).map(r => (
+            {(['entrepreneur', 'investor'] as UserRole[]).map(r => (
               <button
                 key={r}
                 type="button"
@@ -205,6 +219,60 @@ export const LoginPage: React.FC = () => {
               Create one
             </Link>
           </p>
+
+          {/* Seed/Demo Credentials Helper */}
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => setShowDemoAccounts(!showDemoAccounts)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-purple-400 hover:text-purple-300 transition-colors py-2"
+            >
+              <span className="flex items-center gap-1.5">
+                <Key size={14} /> Seed / Demo Accounts (Click to Autofill)
+              </span>
+              <span>{showDemoAccounts ? '▲' : '▼'}</span>
+            </button>
+            
+            {showDemoAccounts && (
+              <div className="mt-3 space-y-2 text-xs bg-white/5 rounded-xl p-3 border border-white/10 animate-fade-in max-h-48 overflow-y-auto">
+                <div
+                  onClick={() => fillCredentials('admin@nexus.com', 'AdminPassword123', 'admin')}
+                  className="p-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg cursor-pointer transition-colors"
+                >
+                  <p className="font-semibold text-purple-200 flex items-center justify-between">
+                    <span>👑 Admin Dashboard</span>
+                    <span className="text-[10px] bg-purple-600 px-1.5 py-0.5 rounded text-white font-medium">Seed Admin</span>
+                  </p>
+                  <p className="text-white/60 mt-1">Email: <span className="text-white">admin@nexus.com</span></p>
+                  <p className="text-white/60">Pass: <span className="text-white">AdminPassword123</span></p>
+                </div>
+
+                <div
+                  onClick={() => fillCredentials('sarah@techwave.io', 'Password123', 'entrepreneur')}
+                  className="p-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg cursor-pointer transition-colors"
+                >
+                  <p className="font-semibold text-blue-200 flex items-center justify-between">
+                    <span>🚀 Entrepreneur (TechWave AI)</span>
+                    <span className="text-[10px] bg-blue-600 px-1.5 py-0.5 rounded text-white font-medium">Entrepreneur</span>
+                  </p>
+                  <p className="text-white/60 mt-1">Email: <span className="text-white">sarah@techwave.io</span></p>
+                  <p className="text-white/60">Pass: <span className="text-white">Password123</span></p>
+                </div>
+
+                <div
+                  onClick={() => fillCredentials('jennifer@impactvc.org', 'Password123', 'investor')}
+                  className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg cursor-pointer transition-colors"
+                >
+                  <p className="font-semibold text-emerald-200 flex items-center justify-between">
+                    <span>💼 Investor (Jennifer Lee)</span>
+                    <span className="text-[10px] bg-emerald-600 px-1.5 py-0.5 rounded text-white font-medium">Investor</span>
+                  </p>
+                  <p className="text-white/60 mt-1">Email: <span className="text-white">jennifer@impactvc.org</span></p>
+                  <p className="text-white/60">Pass: <span className="text-white">Password123</span></p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
