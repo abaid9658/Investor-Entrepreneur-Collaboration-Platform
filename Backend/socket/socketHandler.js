@@ -170,8 +170,23 @@ export const socketHandler = (io) => {
     // 3. CALL INVITE / REAL-TIME NOTIFICATIONS
     
     // Caller initiates a call to another user
-    socket.on('call-invite', (data) => {
+    socket.on('call-invite', async (data) => {
       const { calleeId, roomId, callType = 'video', callerName, callerAvatar } = data;
+
+      // Create a persistent database notification for the call
+      try {
+        await createNotification({
+          recipient: calleeId,
+          sender: userId,
+          type: 'call_invitation',
+          title: `Incoming ${callType.charAt(0).toUpperCase() + callType.slice(1)} Call`,
+          message: `${socket.user.name} is calling you. Join Room ID: ${roomId}`,
+          metadata: { roomId, callType }
+        });
+      } catch (err) {
+        logger.error(`Error saving call notification: ${err.message}`);
+      }
+
       const calleeSocketId = onlineUsers.get(calleeId);
       if (calleeSocketId) {
         io.to(calleeSocketId).emit('incoming-call', {

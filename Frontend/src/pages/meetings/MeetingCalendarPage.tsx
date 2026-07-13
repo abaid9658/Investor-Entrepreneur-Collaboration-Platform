@@ -39,7 +39,17 @@ export const MeetingCalendarPage: React.FC = () => {
     endTime: '',
     attendee: '',
   });
+  const [joinRoomId, setJoinRoomId] = useState('');
   const calendarRef = useRef<FullCalendar>(null);
+
+  const handleJoinById = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinRoomId.trim()) {
+      toast.error('Please enter a valid Room ID');
+      return;
+    }
+    navigate(`/room/${joinRoomId.trim()}`);
+  };
 
   const { data: meetingsData } = useQuery({
     queryKey: ['meetings'],
@@ -151,18 +161,36 @@ export const MeetingCalendarPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Meeting Calendar</h1>
           <p className="text-gray-500 text-sm mt-1">Schedule and manage your meetings</p>
         </div>
-        <button
-          id="schedule-meeting-btn"
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-colors font-medium shadow-md shadow-purple-200"
-        >
-          <Plus size={18} /> Schedule Meeting
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <form onSubmit={handleJoinById} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
+            <input
+              type="text"
+              placeholder="Enter Room ID..."
+              value={joinRoomId}
+              onChange={e => setJoinRoomId(e.target.value)}
+              className="text-sm bg-transparent border-none outline-none focus:ring-0 p-1 w-40 text-gray-800 placeholder-gray-400"
+            />
+            <button
+              type="submit"
+              className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Video size={12} /> Join
+            </button>
+          </form>
+
+          <button
+            id="schedule-meeting-btn"
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-colors font-semibold shadow-sm"
+          >
+            <Plus size={18} /> Schedule Meeting
+          </button>
+        </div>
       </div>
 
       {/* Legend */}

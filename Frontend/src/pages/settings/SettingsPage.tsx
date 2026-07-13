@@ -61,7 +61,19 @@ export const SettingsPage: React.FC = () => {
   const [pwd, setPwd] = useState({ current: '', newPwd: '', confirm: '' });
 
   // Appearance State
-  const [theme, setTheme] = useState<'light' | 'dark' | 'glass'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('nexus_theme');
+    return (saved === 'light' ? 'light' : 'dark') as 'light' | 'dark';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('nexus_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   // Populate state when profile loads
   useEffect(() => {
@@ -403,11 +415,10 @@ export const SettingsPage: React.FC = () => {
               <CardBody className="space-y-6">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900 mb-4">Choose Dashboard Theme</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                       { id: 'light', name: 'Light Mode', style: 'bg-white border-gray-200 text-gray-800' },
-                      { id: 'dark', name: 'Dark Mode (Premium)', style: 'bg-slate-900 border-purple-950 text-white' },
-                      { id: 'glass', name: 'Glassmorphism', style: 'bg-purple-900/10 backdrop-blur border-purple-300 text-purple-900' }
+                      { id: 'dark', name: 'Dark Mode (Premium)', style: 'bg-slate-900 border-purple-950 text-white' }
                     ].map(t => (
                       <button
                         key={t.id}

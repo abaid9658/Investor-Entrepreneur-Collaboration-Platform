@@ -174,6 +174,15 @@ function AppRoutes() {
 }
 
 function App() {
+  React.useEffect(() => {
+    const saved = localStorage.getItem('nexus_theme');
+    if (saved === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <Router>
