@@ -3,12 +3,11 @@ import React from 'react';
 export type BadgeVariant = 'primary' | 'secondary' | 'accent' | 'success' | 'warning' | 'error' | 'gray';
 export type BadgeSize = 'sm' | 'md' | 'lg';
 
-interface BadgeProps {
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   children: React.ReactNode;
   variant?: BadgeVariant;
   size?: BadgeSize;
   rounded?: boolean;
-  className?: string;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
@@ -17,6 +16,7 @@ export const Badge: React.FC<BadgeProps> = ({
   size = 'md',
   rounded = false,
   className = '',
+  ...props
 }) => {
   const variantClasses = {
     primary: 'bg-primary-100 text-primary-800',
@@ -39,6 +39,7 @@ export const Badge: React.FC<BadgeProps> = ({
   return (
     <span
       className={`inline-flex items-center font-medium ${roundedClass} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      {...props}
     >
       {children}
     </span>

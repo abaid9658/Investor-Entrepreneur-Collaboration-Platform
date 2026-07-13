@@ -299,7 +299,7 @@ export const SettingsPage: React.FC = () => {
                         {is2FA ? 'MFA Enabled' : 'Not Configured'}
                       </Badge>
                     </div>
-                    <Button variant={is2FA ? 'danger' : 'primary'} onClick={toggle2FA}>
+                    <Button variant={is2FA ? 'error' : 'primary'} onClick={toggle2FA}>
                       {is2FA ? 'Disable' : 'Enable 2FA'}
                     </Button>
                   </div>

@@ -221,7 +221,7 @@ export const InvestorProfile: React.FC = () => {
               </CardHeader>
               <CardBody>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {investor.portfolioCompanies.map((company, index) => (
+                  {investor.portfolioCompanies.map((company: string, index: number) => (
                     <div key={index} className="p-4 border border-gray-200 rounded-xl text-center bg-gray-50 hover:bg-gray-100/70 transition-colors">
                       <Briefcase className="mx-auto text-purple-600 mb-2" size={24} />
                       <h3 className="font-semibold text-sm text-gray-900">{company}</h3>
