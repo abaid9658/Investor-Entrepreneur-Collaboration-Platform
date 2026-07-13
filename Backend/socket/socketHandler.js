@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Message from '../models/Message.js';
 import logger from '../utils/logger.js';
+import { createNotification } from '../services/notificationService.js';
 
 // Map storing connected users: userId (string) -> socketId (string)
 export const onlineUsers = new Map();
@@ -74,8 +75,22 @@ export const socketHandler = (io) => {
         // Emit message to receiver's personal room
         const receiverSocketId = onlineUsers.get(receiverId);
         if (receiverSocketId) {
-          io.to(receiverSocketId).emit('message-received', message);
+          io.to(receiverSocketId).emit('message-received', {
+            ...message.toObject(),
+            senderName: socket.user.name,
+            senderAvatar: socket.user.avatarUrl
+          });
         }
+
+        // Persist a new_message notification for the receiver
+        await createNotification({
+          recipient: receiverId,
+          sender: userId,
+          type: 'new_message',
+          title: 'New Message',
+          message: `${socket.user.name}: ${content.length > 60 ? content.slice(0, 57) + '...' : content}`,
+          metadata: { conversationId, senderId: userId }
+        });
 
         // Reply success confirmation callback
         if (callback) callback({ success: true, message });
@@ -218,7 +233,23 @@ export const socketHandler = (io) => {
       }
     });
 
-    // 3. DISCONNECT CLEANUP
+    // In-call chat message (broadcast to all in room)
+    socket.on('call-chat-message', (data) => {
+      const { roomId, sender, text, time } = data;
+      socket.to(roomId).emit('call-chat-message', { sender, text, time });
+    });
+
+    // In-call emoji reaction (broadcast to all in room)
+    socket.on('call-reaction', (data) => {
+      const { roomId, emoji } = data;
+      socket.to(roomId).emit('call-reaction-received', {
+        senderId: userId,
+        senderName: socket.user.name,
+        emoji
+      });
+    });
+
+    // 4. DISCONNECT CLEANUP
     socket.on('disconnect', () => {
       onlineUsers.delete(userId);
       socket.broadcast.emit('user-status', { userId, status: 'offline' });

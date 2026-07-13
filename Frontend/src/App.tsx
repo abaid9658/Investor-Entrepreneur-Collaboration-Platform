@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import { Toaster } from 'react-hot-toast';
 
 // Layouts
@@ -176,22 +177,24 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <AppRoutes />
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#1e1b4b',
-              color: '#fff',
-              borderRadius: '12px',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
-              fontSize: '14px',
-            },
-            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-            error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
-          }}
-        />
+        <SocketProvider>
+          <AppRoutes />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1e1b4b',
+                color: '#fff',
+                borderRadius: '12px',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                fontSize: '14px',
+              },
+              success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+              error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+            }}
+          />
+        </SocketProvider>
       </Router>
     </AuthProvider>
   );

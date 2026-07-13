@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../redux/store';
+import { incrementUnread, incrementUnreadMessages } from '../redux/slices/notificationSlice';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 interface SocketContextProps {
   socket: Socket | null;
-  onlineUsers: Record<string, string>; // userId -> socketId / status
+  onlineUsers: Record<string, string>;
 }
 
 const SocketContext = createContext<SocketContextProps>({
@@ -20,13 +22,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [socket, setSocket] = useState<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, string>>({});
   const { token, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const dispatch = useDispatch();
+  const location = useLocation();
 
   useEffect(() => {
     let s: Socket | null = null;
-    
+
     if (isAuthenticated && token) {
-      const baseUrl = import.meta.env.VITE_API_URL 
-        ? import.meta.env.VITE_API_URL.replace('/api', '') 
+      const baseUrl = import.meta.env.VITE_API_URL
+        ? import.meta.env.VITE_API_URL.replace('/api', '')
         : 'http://localhost:5000';
 
       s = io(baseUrl, {
@@ -40,7 +44,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.log('Connected to socket gateway');
       });
 
-      // Status updates
+      // Online status updates
       s.on('user-status', (data: { userId: string; status: string }) => {
         setOnlineUsers((prev) => ({
           ...prev,
@@ -48,10 +52,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }));
       });
 
-      // Notification listener: triggers browser toast alert
-      s.on('notification-received', (notification: { title: string; message: string }) => {
+      // Notification received — increment badge, show toast
+      s.on('notification-received', (notification: { title: string; message: string; type?: string }) => {
+        // Increment sidebar badge
+        dispatch(incrementUnread());
+
+        // Show toast (don't show toast for new_message if user is already on chat page)
+        const isOnChat = location.pathname.startsWith('/chat');
+        if (notification.type === 'new_message' && isOnChat) return;
+
         toast((t) => (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1" onClick={() => toast.dismiss(t.id)}>
             <span className="font-semibold text-gray-900">{notification.title}</span>
             <span className="text-sm text-gray-600">{notification.message}</span>
           </div>
@@ -59,6 +70,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           icon: '🔔',
           duration: 5000
         });
+      });
+
+      // Real-time message received — increment message badge if not in that chat
+      s.on('message-received', (msg: { sender: string; senderName?: string }) => {
+        const isOnChat = location.pathname.startsWith('/chat');
+        if (!isOnChat) {
+          dispatch(incrementUnreadMessages());
+        }
       });
 
       s.on('connect_error', (err) => {
@@ -107,6 +126,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Call accepted — navigate to room
       s.on('call-accepted', (data: { calleeName: string; roomId: string }) => {
         toast.success(`${data.calleeName} accepted the call!`);
+        window.location.href = `/room/${data.roomId}`;
       });
 
       // Call rejected
@@ -116,6 +136,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       // Meeting notification
       s.on('meeting-notification', (data: { type: string; message: string; meetingId?: string; startTime?: string }) => {
+        dispatch(incrementUnread());
         toast(
           (t) => (
             <div className="flex flex-col gap-1" onClick={() => { toast.dismiss(t.id); window.location.href = '/meetings'; }}>

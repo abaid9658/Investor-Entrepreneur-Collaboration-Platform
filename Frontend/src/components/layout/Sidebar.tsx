@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '../../redux/store';
+import { resetUnreadCount, resetUnreadMessages } from '../../redux/slices/notificationSlice';
 import {
   Home, Building2, CircleDollarSign, Users, MessageCircle,
   Bell, FileText, Settings, HelpCircle, Calendar,
-  CreditCard, Video, ChevronLeft, ChevronRight, Handshake
+  CreditCard, Video, ChevronLeft, ChevronRight, Handshake, LogOut
 } from 'lucide-react';
 
 interface SidebarItemProps {
@@ -13,12 +16,14 @@ interface SidebarItemProps {
   text: string;
   collapsed?: boolean;
   badge?: number;
+  onClick?: () => void;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ to, icon, text, collapsed, badge }) => {
+const SidebarItem: React.FC<SidebarItemProps> = ({ to, icon, text, collapsed, badge, onClick }) => {
   return (
     <NavLink
       to={to}
+      onClick={onClick}
       title={collapsed ? text : undefined}
       className={({ isActive }) =>
         `flex items-center rounded-xl transition-all duration-200 group relative ${
@@ -48,10 +53,27 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ to, icon, text, collapsed, ba
 };
 
 export const Sidebar: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const unreadNotif = useSelector((state: RootState) => state.notifications.unreadCount);
+  const unreadMsg = useSelector((state: RootState) => state.notifications.unreadMessageCount);
 
   if (!user) return null;
+
+  const handleNotifClick = () => {
+    dispatch(resetUnreadCount());
+  };
+
+  const handleMsgClick = () => {
+    dispatch(resetUnreadMessages());
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const entrepreneurItems = [
     { to: '/dashboard/entrepreneur', icon: <Home size={20} />, text: 'Dashboard' },
@@ -60,8 +82,8 @@ export const Sidebar: React.FC = () => {
     { to: '/meetings', icon: <Calendar size={20} />, text: 'Meetings' },
     { to: '/documents', icon: <FileText size={20} />, text: 'Document Vault' },
     { to: '/payments', icon: <CreditCard size={20} />, text: 'Payments' },
-    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages' },
-    { to: '/notifications', icon: <Bell size={20} />, text: 'Notifications' },
+    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages', badge: unreadMsg, onClick: handleMsgClick },
+    { to: '/notifications', icon: <Bell size={20} />, text: 'Notifications', badge: unreadNotif, onClick: handleNotifClick },
   ];
 
   const investorItems = [
@@ -72,8 +94,8 @@ export const Sidebar: React.FC = () => {
     { to: '/deals', icon: <Handshake size={20} />, text: 'Deals' },
     { to: '/payments', icon: <CreditCard size={20} />, text: 'Payments' },
     { to: '/documents', icon: <FileText size={20} />, text: 'Document Vault' },
-    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages' },
-    { to: '/notifications', icon: <Bell size={20} />, text: 'Notifications' },
+    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages', badge: unreadMsg, onClick: handleMsgClick },
+    { to: '/notifications', icon: <Bell size={20} />, text: 'Notifications', badge: unreadNotif, onClick: handleNotifClick },
   ];
 
   const adminItems = [
@@ -81,15 +103,15 @@ export const Sidebar: React.FC = () => {
     { to: '/entrepreneurs', icon: <Users size={20} />, text: 'Moderation Feed' },
     { to: '/meetings', icon: <Calendar size={20} />, text: 'Meetings Log' },
     { to: '/payments', icon: <CreditCard size={20} />, text: 'Ledger Audit' },
-    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages' },
-    { to: '/notifications', icon: <Bell size={20} />, text: 'Broadcasts' },
+    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages', badge: unreadMsg, onClick: handleMsgClick },
+    { to: '/notifications', icon: <Bell size={20} />, text: 'Broadcasts', badge: unreadNotif, onClick: handleNotifClick },
   ];
 
-  const sidebarItems = 
-    user.role === 'admin' 
-      ? adminItems 
-      : user.role === 'entrepreneur' 
-      ? entrepreneurItems 
+  const sidebarItems =
+    user.role === 'admin'
+      ? adminItems
+      : user.role === 'entrepreneur'
+      ? entrepreneurItems
       : investorItems;
 
   const commonItems = [
@@ -138,6 +160,8 @@ export const Sidebar: React.FC = () => {
             icon={item.icon}
             text={item.text}
             collapsed={collapsed}
+            badge={item.badge}
+            onClick={item.onClick}
           />
         ))}
 
@@ -160,9 +184,9 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* User Footer */}
-      {!collapsed && (
-        <div className="p-3 border-t border-gray-100">
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors">
+      <div className="p-3 border-t border-gray-100">
+        {!collapsed && (
+          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors mb-2">
             <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-lg object-cover" />
@@ -172,13 +196,21 @@ export const Sidebar: React.FC = () => {
                 </span>
               )}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
               <p className="text-xs text-gray-400 truncate">{user.email}</p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+        <button
+          onClick={handleLogout}
+          title="Logout"
+          className={`flex items-center gap-2 w-full px-2 py-2 rounded-xl text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors ${collapsed ? 'justify-center' : ''}`}
+        >
+          <LogOut size={16} />
+          {!collapsed && <span>Logout</span>}
+        </button>
+      </div>
     </div>
   );
 };

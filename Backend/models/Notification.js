@@ -17,7 +17,10 @@ const notificationSchema = new mongoose.Schema({
       'payment_update', 
       'document_uploaded', 
       'call_invitation', 
-      'new_message'
+      'new_message',
+      'collaborate_request',
+      'new_deal',
+      'deal_update'
     ],
     required: true 
   },

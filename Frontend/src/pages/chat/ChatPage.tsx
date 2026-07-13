@@ -174,24 +174,30 @@ export const ChatPage: React.FC = () => {
             <div className="text-center py-8 text-gray-400 text-sm">No conversations yet</div>
           ) : (
             conversations.map((conv: any) => {
-              const other = conv.participantDetails?.find((p: any) => p._id !== currentUser.id) || conv.participantDetails?.[0];
+              const other = conv.otherParticipant;
               if (!other) return null;
+              const isUnread = conv.lastMessage && !conv.lastMessage.isRead && conv.lastMessage.sender !== currentUser.id;
               return (
                 <button
-                  key={conv._id || conv.conversationId}
+                  key={conv.conversationId}
                   onClick={() => navigate(`/chat/${other._id}`)}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors ${
                     userId === other._id ? 'bg-purple-50 border border-purple-100' : 'hover:bg-gray-100'
                   }`}
                 >
-                  <Avatar
-                    src={other.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(other.name)}&background=random`}
-                    alt={other.name}
-                    size="sm"
-                    status={other.isOnline ? 'online' : 'offline'}
-                  />
+                  <div className="relative flex-shrink-0">
+                    <Avatar
+                      src={other.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(other.name)}&background=random`}
+                      alt={other.name}
+                      size="sm"
+                      status={other.isOnline ? 'online' : 'offline'}
+                    />
+                    {isUnread && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-white" />
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">{other.name}</p>
+                    <p className={`text-sm truncate ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{other.name}</p>
                     <p className="text-xs text-gray-500 truncate">{conv.lastMessage?.content || 'No messages'}</p>
                   </div>
                 </button>
