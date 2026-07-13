@@ -85,7 +85,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // Create User
-  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+  const avatarUrl = req.body.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
   const user = await User.create({
     name,
     email,
@@ -97,6 +97,16 @@ export const register = asyncHandler(async (req, res) => {
   // Automatically seed an empty profile linked to the User
   await Profile.create({
     user: user._id
+  });
+
+  // Automatically credit $50,000 for sandbox sandbox balance
+  const { default: Transaction } = await import('../models/Transaction.js');
+  await Transaction.create({
+    user: user._id,
+    type: 'deposit',
+    amount: 50000,
+    status: 'completed',
+    description: 'Initial Sandbox Balance Credit'
   });
 
   // Track event in audit trail
@@ -433,6 +443,277 @@ export const resetPassword = asyncHandler(async (req, res) => {
     success: true,
     message: 'Password reset completed successfully. You can now login with your new password.',
     data: null,
+    errors: null
+  });
+});
+
+// @desc    Seed test database with 4 entrepreneurs, 5 investors, and 1 admin
+// @route   GET /api/auth/seed
+// @access  Public
+export const seedData = asyncHandler(async (req, res) => {
+  const { default: Transaction } = await import('../models/Transaction.js');
+  
+  // 1. Clean existing records to avoid duplicates (optional, keep custom registered users but clear seed emails)
+  const seedEmails = [
+    'sarah@techwave.io', 'david@greenlife.co', 'maya@healthpulse.com', 'james@urbanfarm.io',
+    'michael@vcinnovate.com', 'jennifer@impactvc.org', 'robert@healthventures.com', 
+    'emma@ventures.com', 'john@angel.com', 'admin@nexus.com'
+  ];
+
+  await User.deleteMany({ email: { $in: seedEmails } });
+
+  // 2. Define seed users
+  const entrepreneursSeed = [
+    {
+      name: 'Sarah Johnson',
+      email: 'sarah@techwave.io',
+      password: 'Password123',
+      role: 'entrepreneur',
+      avatarUrl: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
+      bio: 'Serial entrepreneur with 10+ years of experience in SaaS and fintech.',
+      profile: {
+        startupName: 'TechWave AI',
+        pitchSummary: 'AI-powered financial analytics platform helping SMBs make data-driven decisions.',
+        fundingStage: 'Seed',
+        industry: 'FinTech',
+        foundedYear: 2021,
+        teamSize: 12,
+        location: 'San Francisco, CA',
+        website: 'https://techwave.io',
+        skills: ['AI', 'SaaS', 'Finance']
+      }
+    },
+    {
+      name: 'David Chen',
+      email: 'david@greenlife.co',
+      password: 'Password123',
+      role: 'entrepreneur',
+      avatarUrl: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg',
+      bio: 'Environmental scientist turned entrepreneur. Passionate about sustainable solutions.',
+      profile: {
+        startupName: 'GreenLife Solutions',
+        pitchSummary: 'Biodegradable packaging alternatives for consumer goods and food industry.',
+        fundingStage: 'Pre-seed',
+        industry: 'CleanTech',
+        foundedYear: 2020,
+        teamSize: 8,
+        location: 'Portland, OR',
+        website: 'https://greenlife.co',
+        skills: ['CleanTech', 'Bioplastics', 'Operations']
+      }
+    },
+    {
+      name: 'Maya Patel',
+      email: 'maya@healthpulse.com',
+      password: 'Password123',
+      role: 'entrepreneur',
+      avatarUrl: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
+      bio: 'Former healthcare professional with an MBA. Building tech to improve patient care.',
+      profile: {
+        startupName: 'HealthPulse',
+        pitchSummary: 'Mobile platform connecting patients with mental health professionals in real-time.',
+        fundingStage: 'Seed',
+        industry: 'HealthTech',
+        foundedYear: 2022,
+        teamSize: 5,
+        location: 'Boston, MA',
+        website: 'https://healthpulse.com',
+        skills: ['HealthTech', 'Telehealth', 'Product Management']
+      }
+    },
+    {
+      name: 'James Wilson',
+      email: 'james@urbanfarm.io',
+      password: 'Password123',
+      role: 'entrepreneur',
+      avatarUrl: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+      bio: 'Agricultural engineer focused on urban farming solutions and food security.',
+      profile: {
+        startupName: 'UrbanFarm',
+        pitchSummary: 'IoT-enabled vertical farming systems for urban environments and food deserts.',
+        fundingStage: 'Series A',
+        industry: 'AgTech',
+        foundedYear: 2019,
+        teamSize: 14,
+        location: 'Chicago, IL',
+        website: 'https://urbanfarm.io',
+        skills: ['IoT', 'Agriculture', 'Embedded Systems']
+      }
+    }
+  ];
+
+  const investorsSeed = [
+    {
+      name: 'Michael Rodriguez',
+      email: 'michael@vcinnovate.com',
+      password: 'Password123',
+      role: 'investor',
+      avatarUrl: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg',
+      bio: 'Early-stage investor with focus on B2B SaaS and fintech. Previously founded and exited two startups.',
+      profile: {
+        investmentInterests: ['FinTech', 'SaaS', 'AI/ML'],
+        investmentStage: ['Seed', 'Series A'],
+        portfolioCompanies: ['PayStream', 'DataSense', 'CloudSecure'],
+        minimumInvestment: 250000,
+        maximumInvestment: 1500000,
+        totalInvestmentsCount: 12,
+        location: 'Miami, FL',
+        website: 'https://vcinnovate.com'
+      }
+    },
+    {
+      name: 'Jennifer Lee',
+      email: 'jennifer@impactvc.org',
+      password: 'Password123',
+      role: 'investor',
+      avatarUrl: 'https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg',
+      bio: 'Impact investor focused on climate tech, sustainable agriculture, and clean energy.',
+      profile: {
+        investmentInterests: ['CleanTech', 'AgTech', 'Sustainability'],
+        investmentStage: ['Seed', 'Series A', 'Series B'],
+        portfolioCompanies: ['SolarFlow', 'EcoPackage', 'CleanWater Solutions'],
+        minimumInvestment: 500000,
+        maximumInvestment: 3000000,
+        totalInvestmentsCount: 18,
+        location: 'Seattle, WA',
+        website: 'https://impactvc.org'
+      }
+    },
+    {
+      name: 'Robert Torres',
+      email: 'robert@healthventures.com',
+      password: 'Password123',
+      role: 'investor',
+      avatarUrl: 'https://images.pexels.com/photos/834863/pexels-photo-834863.jpeg',
+      bio: 'Healthcare-focused investor with medical background. Looking for innovations in patient care and biotech.',
+      profile: {
+        investmentInterests: ['HealthTech', 'BioTech', 'Medical Devices'],
+        investmentStage: ['Series A', 'Series B'],
+        portfolioCompanies: ['MediTrack', 'BioGenics', 'Patient+'],
+        minimumInvestment: 1000000,
+        maximumInvestment: 5000000,
+        totalInvestmentsCount: 9,
+        location: 'Boston, MA',
+        website: 'https://healthventures.com'
+      }
+    },
+    {
+      name: 'Emma Watson',
+      email: 'emma@ventures.com',
+      password: 'Password123',
+      role: 'investor',
+      avatarUrl: 'https://images.pexels.com/photos/3763188/pexels-photo-3763188.jpeg',
+      bio: 'Angel investor looking for revolutionary AI/ML solutions and digital transformation.',
+      profile: {
+        investmentInterests: ['AI/ML', 'SaaS', 'Web3'],
+        investmentStage: ['Pre-seed', 'Seed'],
+        portfolioCompanies: ['OpenMinds', 'FutureAI'],
+        minimumInvestment: 50000,
+        maximumInvestment: 500000,
+        totalInvestmentsCount: 4,
+        location: 'New York, NY',
+        website: 'https://emmaventures.com'
+      }
+    },
+    {
+      name: 'John Doe',
+      email: 'john@angel.com',
+      password: 'Password123',
+      role: 'investor',
+      avatarUrl: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+      bio: 'Angel investor focusing on AgTech and sustainability startup teams.',
+      profile: {
+        investmentInterests: ['AgTech', 'CleanTech'],
+        investmentStage: ['Seed'],
+        portfolioCompanies: ['FarmGrow'],
+        minimumInvestment: 100000,
+        maximumInvestment: 800000,
+        totalInvestmentsCount: 6,
+        location: 'Chicago, IL',
+        website: 'https://johnangel.com'
+      }
+    }
+  ];
+
+  // 3. Insert users and create profiles
+  const createdUsers = [];
+  
+  // Seed admin
+  const adminUser = await User.create({
+    name: 'Nexus Admin',
+    email: 'admin@nexus.com',
+    password: 'AdminPassword123',
+    role: 'admin',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff'
+  });
+  await Profile.create({ user: adminUser._id });
+  createdUsers.push(adminUser);
+
+  // Seed entrepreneurs
+  for (const ent of entrepreneursSeed) {
+    const user = await User.create({
+      name: ent.name,
+      email: ent.email,
+      password: ent.password,
+      role: ent.role,
+      avatarUrl: ent.avatarUrl,
+      bio: ent.bio
+    });
+    
+    // Seed detailed profile
+    await Profile.create({
+      user: user._id,
+      ...ent.profile
+    });
+
+    // Seed welcome balance
+    await Transaction.create({
+      user: user._id,
+      type: 'deposit',
+      amount: 50000,
+      status: 'completed',
+      description: 'Seed Welcome Wallet Balance'
+    });
+
+    createdUsers.push(user);
+  }
+
+  // Seed investors
+  for (const inv of investorsSeed) {
+    const user = await User.create({
+      name: inv.name,
+      email: inv.email,
+      password: inv.password,
+      role: inv.role,
+      avatarUrl: inv.avatarUrl,
+      bio: inv.bio
+    });
+    
+    // Seed detailed profile
+    await Profile.create({
+      user: user._id,
+      ...inv.profile
+    });
+
+    // Seed welcome balance
+    await Transaction.create({
+      user: user._id,
+      type: 'deposit',
+      amount: 150000, // Give investors more seed funds to make investments!
+      status: 'completed',
+      description: 'Seed Investor Investment Fund Wallet'
+    });
+
+    createdUsers.push(user);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Database seeded successfully with 4 entrepreneurs, 5 investors, and 1 admin.',
+    data: {
+      usersCount: createdUsers.length,
+      users: createdUsers.map(u => ({ id: u._id, name: u.name, email: u.email, role: u.role }))
+    },
     errors: null
   });
 });

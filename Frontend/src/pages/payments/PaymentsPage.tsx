@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DollarSign, TrendingUp, ArrowUpRight, ArrowDownLeft,
   CreditCard, Filter, CheckCircle, Clock, XCircle,
-  Download, RefreshCw, ChevronRight, AlertTriangle
+  Download, RefreshCw, ChevronRight, AlertTriangle, User, Calendar, ShieldCheck
 } from 'lucide-react';
 import {
   getLedger,
@@ -22,6 +22,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 };
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; isCredit: boolean }> = {
+  deposit:        { label: 'Deposit',        icon: <ArrowDownLeft size={16} />, isCredit: true  },
+  withdraw:       { label: 'Withdrawal',     icon: <ArrowUpRight size={16} />,  isCredit: false },
+  transfer:       { label: 'Transfer',       icon: <ArrowUpRight size={16} />,  isCredit: false },
   investment:     { label: 'Investment',     icon: <ArrowDownLeft size={16} />, isCredit: true  },
   withdrawal:     { label: 'Withdrawal',     icon: <ArrowUpRight size={16} />,  isCredit: false },
   subscription:   { label: 'Subscription',  icon: <CreditCard size={16} />,    isCredit: false },
@@ -32,7 +35,12 @@ export const PaymentsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
   const [showInvestModal, setShowInvestModal] = useState(false);
+  
+  // Modal flow step state
+  const [modalStep, setModalStep] = useState<'details' | 'card' | 'processing'>('details');
+  
   const [investForm, setInvestForm] = useState({ amount: '', currency: 'usd', recipientId: '', description: '' });
+  const [cardForm, setCardForm] = useState({ name: '', number: '', expiry: '', cvv: '' });
   const [selectedTx, setSelectedTx] = useState<any>(null);
 
   const { data: balanceData, isLoading: isBalanceLoading } = useQuery({
@@ -49,19 +57,6 @@ export const PaymentsPage: React.FC = () => {
   const allTransactions = ledgerData?.data || [];
   const transactions = filter === 'all' ? allTransactions : allTransactions.filter((t: any) => t.status === filter);
 
-  const intentMutation = useMutation({
-    mutationFn: createPaymentIntent,
-    onSuccess: async (data) => {
-      // Immediately confirm in sandbox mode (no real Stripe card UI)
-      const clientSecret = data.data?.clientSecret;
-      const txId = data.data?.transactionId;
-      if (txId) {
-        await confirmMutation.mutateAsync({ transactionId: txId, paymentMethodId: 'pm_card_visa' });
-      }
-    },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Payment initiation failed'),
-  });
-
   const confirmMutation = useMutation({
     mutationFn: confirmPayment,
     onSuccess: () => {
@@ -69,134 +64,148 @@ export const PaymentsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['ledger'] });
       queryClient.invalidateQueries({ queryKey: ['balance'] });
       setShowInvestModal(false);
+      setModalStep('details');
       setInvestForm({ amount: '', currency: 'usd', recipientId: '', description: '' });
+      setCardForm({ name: '', number: '', expiry: '', cvv: '' });
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Payment confirmation failed'),
+    onError: (err: any) => {
+      setModalStep('card');
+      toast.error(err.response?.data?.message || 'Payment confirmation failed');
+    },
   });
 
-  const handleInvest = (e: React.FormEvent) => {
+  const intentMutation = useMutation({
+    mutationFn: createPaymentIntent,
+    onSuccess: async (data) => {
+      const txId = data.data?.transactionId;
+      if (txId) {
+        // Confirms payment intent
+        await confirmMutation.mutateAsync({ transactionId: txId, paymentMethodId: 'pm_card_visa' });
+      }
+    },
+    onError: (err: any) => {
+      setModalStep('card');
+      toast.error(err.response?.data?.message || 'Payment initiation failed');
+    },
+  });
+
+  const handleInvestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!investForm.amount || parseFloat(investForm.amount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
+    if (modalStep === 'details') {
+      if (!investForm.amount || parseFloat(investForm.amount) <= 0) {
+        toast.error('Please enter a valid amount');
+        return;
+      }
+      setModalStep('card');
+    } else if (modalStep === 'card') {
+      if (!cardForm.name || !cardForm.number || !cardForm.expiry || !cardForm.cvv) {
+        toast.error('Please fill in all credit card details');
+        return;
+      }
+      setModalStep('processing');
+      intentMutation.mutate({
+        amount: parseFloat(investForm.amount),
+        currency: investForm.currency,
+        recipientId: investForm.recipientId || undefined,
+        description: investForm.description,
+        type: 'investment',
+      });
     }
-    intentMutation.mutate({
-      amount: parseFloat(investForm.amount),
-      currency: investForm.currency,
-      recipientId: investForm.recipientId || undefined,
-      description: investForm.description,
-      type: 'investment',
-    });
   };
 
-  const isLoading = isBalanceLoading || isLedgerLoading;
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    const matches = v.match(/\d{4,16}/g);
+    const match = (matches && matches[0]) || '';
+    const parts = [];
 
-  const stats = [
-    {
-      label: 'Available Balance',
-      value: `$${balance.availableBalance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      icon: <DollarSign size={22} />,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-      border: 'border-green-100',
-    },
-    {
-      label: 'Pending',
-      value: `$${balance.pendingBalance?.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      icon: <Clock size={22} />,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-      border: 'border-amber-100',
-    },
-    {
-      label: 'Total Invested',
-      value: `$${balance.totalInvested?.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      icon: <TrendingUp size={22} />,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-      border: 'border-blue-100',
-    },
-    {
-      label: 'Total Received',
-      value: `$${balance.totalReceived?.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      icon: <ArrowDownLeft size={22} />,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-      border: 'border-purple-100',
-    },
-  ];
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+
+    if (parts.length > 0) {
+      return parts.join(' ');
+    } else {
+      return v;
+    }
+  };
+
+  const formatExpiry = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    if (v.length >= 2) {
+      return `${v.slice(0, 2)}/${v.slice(2, 4)}`;
+    }
+    return v;
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Payments & Ledger</h1>
-          <p className="text-gray-500 text-sm mt-1">Track investments and financial activity</p>
+          <h1 className="text-2xl font-bold text-gray-900">Wallet & Payments</h1>
+          <p className="text-gray-600">Track and manage your platform balances</p>
         </div>
-        <div className="flex gap-2">
-          <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
-            <AlertTriangle size={12} />
-            Sandbox Mode
-          </div>
-          <button
-            id="make-investment-btn"
-            onClick={() => setShowInvestModal(true)}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-colors font-medium shadow-md shadow-purple-200 text-sm"
-          >
-            <CreditCard size={16} /> Make Investment
-          </button>
-        </div>
+        <Button leftIcon={<CreditCard size={18} />} onClick={() => { setModalStep('details'); setShowInvestModal(true); }}>
+          New Investment
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, i) => (
-          <div key={i} className={`bg-white rounded-2xl border ${stat.border} p-5 shadow-sm`}>
-            <div className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center ${stat.color} mb-3`}>
-              {stat.icon}
+      {/* Analytics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {[
+          { label: 'Available Balance', value: balance.availableBalance, color: 'text-purple-600', icon: <DollarSign size={20} /> },
+          { label: 'Pending Clearances', value: balance.pendingBalance, color: 'text-amber-600', icon: <Clock size={20} /> },
+          { label: 'Total Invested', value: balance.totalInvested, color: 'text-gray-900', icon: <ArrowUpRight size={20} /> },
+          { label: 'Total Received', value: balance.totalReceived, color: 'text-green-600', icon: <ArrowDownLeft size={20} /> }
+        ].map((stat, i) => (
+          <div key={i} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start">
+              <span className="text-sm font-medium text-gray-500">{stat.label}</span>
+              <div className="p-2 bg-gray-50 rounded-lg text-gray-400">{stat.icon}</div>
             </div>
-            <p className="text-gray-500 text-xs font-medium">{stat.label}</p>
-            <p className={`text-xl font-bold mt-1 ${isLoading ? 'animate-pulse text-gray-300' : 'text-gray-900'}`}>
-              {isLoading ? '—' : stat.value}
-            </p>
+            <div className="mt-4">
+              <h3 className={`text-2xl font-bold ${stat.color}`}>
+                ${stat.value?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </h3>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Transaction Ledger */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Transaction History</h2>
+      {/* Ledger History */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center gap-2">
-            <Filter size={14} className="text-gray-400" />
-            <select
-              value={filter}
-              onChange={e => setFilter(e.target.value as any)}
-              className="border-none text-sm text-gray-600 focus:outline-none focus:ring-0 cursor-pointer"
-            >
-              <option value="all">All</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-            </select>
+            <RefreshCw className="text-purple-500 animate-spin-slow" size={18} />
+            <h2 className="text-lg font-bold text-gray-900">Transaction History</h2>
+          </div>
+          <div className="flex gap-2">
+            {(['all', 'completed', 'pending', 'failed'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setFilter(tab)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${filter === tab ? 'bg-purple-100 text-purple-700' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
         </div>
 
         {isLedgerLoading ? (
-          <div className="p-8 text-center text-gray-400">
-            <div className="w-8 h-8 border-2 border-gray-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm">Loading transactions...</p>
+          <div className="flex items-center justify-center p-12">
+            <div className="w-8 h-8 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin" />
           </div>
         ) : transactions.length === 0 ? (
-          <div className="p-12 text-center text-gray-400">
-            <DollarSign size={40} className="mx-auto mb-3 opacity-20" />
-            <p className="font-medium">No transactions yet</p>
-            <p className="text-sm mt-1">Make your first investment to get started</p>
+          <div className="text-center py-16 text-gray-500 space-y-2">
+            <Clock className="mx-auto text-gray-300" size={36} />
+            <h3 className="font-semibold text-gray-700">No transactions recorded</h3>
+            <p className="text-sm">Deposit or invest to start ledger entries.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-100">
             {transactions.map((tx: any) => {
-              const typeConfig = TYPE_CONFIG[tx.type] || { label: tx.type, icon: <DollarSign size={16} />, isCredit: false };
+              const typeConfig = TYPE_CONFIG[tx.type] || TYPE_CONFIG.investment;
               const statusConfig = STATUS_CONFIG[tx.status] || STATUS_CONFIG.pending;
               return (
                 <div
@@ -238,98 +247,205 @@ export const PaymentsPage: React.FC = () => {
       {/* Investment Modal */}
       {showInvestModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-up">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <CreditCard size={18} className="text-purple-500" />
-                <h2 className="text-xl font-bold text-gray-900">Make Investment</h2>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {modalStep === 'details' ? 'Make Investment' : modalStep === 'card' ? 'Card Details' : 'Processing Payment'}
+                </h2>
               </div>
               <button onClick={() => setShowInvestModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <XCircle size={20} className="text-gray-400" />
               </button>
             </div>
-            <form onSubmit={handleInvest} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                    <input
-                      required
-                      type="number"
-                      min="1"
-                      step="0.01"
-                      value={investForm.amount}
-                      onChange={e => setInvestForm(f => ({ ...f, amount: e.target.value }))}
-                      placeholder="0.00"
-                      className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
-                    />
+
+            {modalStep === 'processing' ? (
+              <div className="p-12 text-center space-y-4">
+                <div className="w-12 h-12 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin mx-auto" />
+                <h3 className="font-bold text-gray-900 text-lg">Authorizing Card...</h3>
+                <p className="text-gray-500 text-sm">Please do not refresh. Securing sandbox tokens with Stripe.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleInvestSubmit} className="p-6 space-y-4">
+                {modalStep === 'details' ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Amount *</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
+                          <input
+                            required
+                            type="number"
+                            min="1"
+                            step="0.01"
+                            value={investForm.amount}
+                            onChange={e => setInvestForm(f => ({ ...f, amount: e.target.value }))}
+                            placeholder="0.00"
+                            className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Currency</label>
+                        <select
+                          value={investForm.currency}
+                          onChange={e => setInvestForm(f => ({ ...f, currency: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm bg-white"
+                        >
+                          <option value="usd">USD</option>
+                          <option value="eur">EUR</option>
+                          <option value="gbp">GBP</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Recipient User ID</label>
+                      <input
+                        value={investForm.recipientId}
+                        onChange={e => setInvestForm(f => ({ ...f, recipientId: e.target.value }))}
+                        placeholder="Optional - paste user ID"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Description / Memo</label>
+                      <textarea
+                        rows={2}
+                        value={investForm.description}
+                        onChange={e => setInvestForm(f => ({ ...f, description: e.target.value }))}
+                        placeholder="Investment purpose, deal notes..."
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm resize-none"
+                      />
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowInvestModal(false)}
+                        className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl transition-colors text-sm font-semibold flex items-center justify-center gap-2"
+                      >
+                        Continue <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  // Card details screen
+                  <div className="space-y-4">
+                    {/* Simulated Credit Card Graphic */}
+                    <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 rounded-2xl p-5 text-white shadow-lg space-y-6 relative overflow-hidden border border-white/10">
+                      <div className="flex justify-between items-start">
+                        <CreditCard size={32} className="text-white/80" />
+                        <span className="text-xs font-bold tracking-wider text-white/50">SANDBOX CARD</span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-white/40 tracking-wider">CARD NUMBER</p>
+                        <p className="text-lg font-mono tracking-widest text-white/90">
+                          {cardForm.number || '•••• •••• •••• ••••'}
+                        </p>
+                      </div>
+                      <div className="flex justify-between items-end">
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] text-white/40 tracking-wider">HOLDER NAME</p>
+                          <p className="text-sm font-medium tracking-wide uppercase truncate max-w-[180px]">
+                            {cardForm.name || 'John Doe'}
+                          </p>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] text-white/40 tracking-wider">EXPIRES</p>
+                            <p className="text-sm font-mono">{cardForm.expiry || 'MM/YY'}</p>
+                          </div>
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] text-white/40 tracking-wider">CVV</p>
+                            <p className="text-sm font-mono">{cardForm.cvv || '•••'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Inputs */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cardholder Name *</label>
+                        <input
+                          required
+                          value={cardForm.name}
+                          onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))}
+                          placeholder="e.g. Sarah Johnson"
+                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Card Number *</label>
+                        <div className="relative">
+                          <input
+                            required
+                            maxLength={19}
+                            value={cardForm.number}
+                            onChange={e => setCardForm(f => ({ ...f, number: formatCardNumber(e.target.value) }))}
+                            placeholder="4242 4242 4242 4242"
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
+                          />
+                          <ShieldCheck size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Expiry Date *</label>
+                          <input
+                            required
+                            maxLength={5}
+                            value={cardForm.expiry}
+                            onChange={e => setCardForm(f => ({ ...f, expiry: formatExpiry(e.target.value) }))}
+                            placeholder="MM/YY"
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">CVV / CVC *</label>
+                          <input
+                            required
+                            maxLength={4}
+                            value={cardForm.cvv}
+                            onChange={e => setCardForm(f => ({ ...f, cvv: e.target.value.replace(/\D/g,'') }))}
+                            placeholder="123"
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setModalStep('details')}
+                        className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl transition-colors text-sm font-semibold flex items-center justify-center gap-2"
+                      >
+                        Confirm & Pay
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                  <select
-                    value={investForm.currency}
-                    onChange={e => setInvestForm(f => ({ ...f, currency: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
-                  >
-                    <option value="usd">USD</option>
-                    <option value="eur">EUR</option>
-                    <option value="gbp">GBP</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Recipient ID</label>
-                <input
-                  value={investForm.recipientId}
-                  onChange={e => setInvestForm(f => ({ ...f, recipientId: e.target.value }))}
-                  placeholder="Optional - paste user ID"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={investForm.description}
-                  onChange={e => setInvestForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Investment purpose, deal notes..."
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all text-sm resize-none"
-                />
-              </div>
-
-              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-                <span>This is a <strong>sandbox environment</strong>. No real money will be charged. Test card <code className="bg-amber-100 px-1 rounded">4242 4242 4242 4242</code> is auto-used.</span>
-              </div>
-
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowInvestModal(false)}
-                  className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  id="confirm-payment-btn"
-                  type="submit"
-                  disabled={intentMutation.isPending || confirmMutation.isPending}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl transition-colors text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {intentMutation.isPending || confirmMutation.isPending ? (
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <CreditCard size={14} /> Confirm Investment
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+                )}
+              </form>
+            )}
           </div>
         </div>
       )}

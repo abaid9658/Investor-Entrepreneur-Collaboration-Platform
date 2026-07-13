@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { Send, Phone, Video, Info, Smile } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Send, Phone, Video, Info, Smile, MessageCircle } from 'lucide-react';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -8,20 +8,47 @@ import { ChatMessage } from '../../components/chat/ChatMessage';
 import { ChatUserList } from '../../components/chat/ChatUserList';
 import { useAuth } from '../../context/AuthContext';
 import { Message } from '../../types';
-import { findUserById } from '../../data/users';
+import { getProfileById } from '../../api/services/profileService';
 import { getMessagesBetweenUsers, sendMessage, getConversationsForUser } from '../../data/messages';
-import { MessageCircle } from 'lucide-react';
 
 export const ChatPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [conversations, setConversations] = useState<any[]>([]);
+  const [chatPartner, setChatPartner] = useState<any>(null);
+  
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   
-  const chatPartner = userId ? findUserById(userId) : null;
-  
+  // Fetch chat partner profile details from backend
+  useEffect(() => {
+    if (userId) {
+      getProfileById(userId)
+        .then((res) => {
+          if (res?.data?.user) {
+            setChatPartner({
+              id: res.data.user._id,
+              name: res.data.user.name,
+              avatarUrl: res.data.user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.data.user.name)}&background=random`,
+              isOnline: res.data.user.isOnline || false
+            });
+          }
+        })
+        .catch(() => {
+          // Fallback to minimal details if profile endpoint fails
+          setChatPartner({
+            id: userId,
+            name: 'Collaborator',
+            avatarUrl: `https://ui-avatars.com/api/?name=User&background=random`,
+            isOnline: false
+          });
+        });
+    }
+  }, [userId]);
+
   useEffect(() => {
     // Load conversations
     if (currentUser) {
@@ -57,6 +84,14 @@ export const ChatPage: React.FC = () => {
     
     // Update conversations
     setConversations(getConversationsForUser(currentUser.id));
+  };
+
+  const handleStartCall = () => {
+    if (currentUser && userId) {
+      // Use conversation ID as room ID
+      const roomId = [currentUser.id, userId].sort().join('_');
+      navigate(`/room/${roomId}`);
+    }
   };
   
   if (!currentUser) return null;
@@ -97,6 +132,7 @@ export const ChatPage: React.FC = () => {
                   size="sm"
                   className="rounded-full p-2"
                   aria-label="Voice call"
+                  onClick={handleStartCall}
                 >
                   <Phone size={18} />
                 </Button>
@@ -106,6 +142,7 @@ export const ChatPage: React.FC = () => {
                   size="sm"
                   className="rounded-full p-2"
                   aria-label="Video call"
+                  onClick={handleStartCall}
                 >
                   <Video size={18} />
                 </Button>
@@ -115,6 +152,7 @@ export const ChatPage: React.FC = () => {
                   size="sm"
                   className="rounded-full p-2"
                   aria-label="Info"
+                  onClick={() => alert(`Details: ID is ${chatPartner.id}`)}
                 >
                   <Info size={18} />
                 </Button>
@@ -127,9 +165,9 @@ export const ChatPage: React.FC = () => {
                 <div className="space-y-4">
                   {messages.map(message => (
                     <ChatMessage
-                      key={message.id}
-                      message={message}
-                      isCurrentUser={message.senderId === currentUser.id}
+                       key={message.id}
+                       message={message}
+                       isCurrentUser={message.senderId === currentUser.id}
                     />
                   ))}
                   <div ref={messagesEndRef} />

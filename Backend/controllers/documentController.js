@@ -21,22 +21,21 @@ const runTransaction = async (action) => {
     return result;
   } catch (error) {
     if (session) {
-      await session.abortTransaction();
+      try {
+        await session.abortTransaction();
+      } catch (e) {
+        // Ignore abort errors
+      }
     }
-    
-    // Check if error is due to lack of Replica Sets in local MongoDB
-    if (
-      error.message.includes('replica set') || 
-      error.message.includes('Transaction') ||
-      error.code === 20
-    ) {
-      logger.warn('Replica Set not configured. Executing database operations non-transactionally.');
-      return await action(null);
-    }
-    throw error;
+    logger.warn(`Transaction execution failed (${error.message}). Falling back to non-transactional execution.`);
+    return await action(null);
   } finally {
     if (session) {
-      session.endSession();
+      try {
+        session.endSession();
+      } catch (e) {
+        // Ignore end errors
+      }
     }
   }
 };

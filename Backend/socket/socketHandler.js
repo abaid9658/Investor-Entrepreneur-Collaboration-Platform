@@ -14,9 +14,14 @@ export const socketHandler = (io) => {
   // Middleware to verify JWT during Socket.io handshake
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth?.token || socket.handshake.headers?.token;
+      let token = socket.handshake.auth?.token || socket.handshake.headers?.token;
       if (!token) {
         return next(new Error('Authentication failure: JWT token missing'));
+      }
+
+      // If token starts with Bearer, strip it
+      if (token.startsWith('Bearer ')) {
+        token = token.slice(7);
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);

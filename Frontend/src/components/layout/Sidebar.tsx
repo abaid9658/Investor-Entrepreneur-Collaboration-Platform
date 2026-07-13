@@ -76,7 +76,21 @@ export const Sidebar: React.FC = () => {
     { to: '/notifications', icon: <Bell size={20} />, text: 'Notifications' },
   ];
 
-  const sidebarItems = user.role === 'entrepreneur' ? entrepreneurItems : investorItems;
+  const adminItems = [
+    { to: '/dashboard/admin', icon: <Home size={20} />, text: 'Admin Portal' },
+    { to: '/entrepreneurs', icon: <Users size={20} />, text: 'Moderation Feed' },
+    { to: '/meetings', icon: <Calendar size={20} />, text: 'Meetings Log' },
+    { to: '/payments', icon: <CreditCard size={20} />, text: 'Ledger Audit' },
+    { to: '/chat', icon: <MessageCircle size={20} />, text: 'Messages' },
+    { to: '/notifications', icon: <Bell size={20} />, text: 'Broadcasts' },
+  ];
+
+  const sidebarItems = 
+    user.role === 'admin' 
+      ? adminItems 
+      : user.role === 'entrepreneur' 
+      ? entrepreneurItems 
+      : investorItems;
 
   const commonItems = [
     { to: '/settings', icon: <Settings size={20} />, text: 'Settings' },

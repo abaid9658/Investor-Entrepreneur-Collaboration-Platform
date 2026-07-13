@@ -26,8 +26,12 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await login(email, password, role);
-      navigate(role === 'investor' ? '/dashboard/investor' : '/dashboard/entrepreneur');
+      const loggedUser = await login(email, password, role);
+      if (loggedUser?.role === 'admin') {
+        navigate('/dashboard/admin');
+      } else {
+        navigate(loggedUser?.role === 'investor' ? '/dashboard/investor' : '/dashboard/entrepreneur');
+      }
     } catch (error: any) {
       if (error.message?.startsWith('2FA_REQUIRED:')) {
         const emailFromErr = error.message.split(':')[1];
@@ -48,7 +52,11 @@ export const LoginPage: React.FC = () => {
       const res = await verify2FALogin({ email: twoFAEmail, code: otpCode });
       dispatch(setCredentials({ user: res.data.user, accessToken: res.data.accessToken }));
       toast.success('Login successful!');
-      navigate(res.data.user.role === 'investor' ? '/dashboard/investor' : '/dashboard/entrepreneur');
+      if (res.data.user.role === 'admin') {
+        navigate('/dashboard/admin');
+      } else {
+        navigate(res.data.user.role === 'investor' ? '/dashboard/investor' : '/dashboard/entrepreneur');
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Invalid verification code');
     } finally {
@@ -110,7 +118,7 @@ export const LoginPage: React.FC = () => {
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
           {/* Role Toggle */}
           <div className="flex bg-white/10 rounded-xl p-1 mb-6">
-            {(['entrepreneur', 'investor'] as UserRole[]).map(r => (
+            {(['entrepreneur', 'investor', 'admin'] as UserRole[]).map(r => (
               <button
                 key={r}
                 type="button"

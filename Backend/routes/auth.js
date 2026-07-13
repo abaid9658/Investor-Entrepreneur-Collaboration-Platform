@@ -6,13 +6,15 @@ import {
   refresh, 
   logout, 
   forgotPassword, 
-  resetPassword 
+  resetPassword,
+  seedData
 } from '../controllers/authController.js';
 import { registerValidator, loginValidator } from '../validators/authValidator.js';
 import { authLimiter } from '../middlewares/rateLimiter.js';
 
 const router = express.Router();
 
+router.get('/seed', seedData);
 router.post('/register', authLimiter, registerValidator, register);
 router.post('/login', authLimiter, loginValidator, login);
 router.post('/verify-2fa', authLimiter, verify2FA);

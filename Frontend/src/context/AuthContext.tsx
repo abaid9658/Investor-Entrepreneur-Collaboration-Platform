@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Login handler
-  const login = async (email: string, password: string, role: UserRole): Promise<void> => {
+  const login = async (email: string, password: string, role: UserRole): Promise<any> => {
     setIsLoading(true);
     try {
       const res = await loginUser({ email, password, role });
@@ -54,6 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(loggedUser);
       dispatch(setCredentials({ user: loggedUser, accessToken: token }));
       toast.success('Successfully logged in!');
+      return loggedUser;
     } catch (error: any) {
       if (error.message?.startsWith('2FA_REQUIRED:')) {
         throw error;

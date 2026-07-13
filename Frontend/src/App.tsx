@@ -31,11 +31,11 @@ import { HelpPage } from './pages/help/HelpPage';
 import { DealsPage } from './pages/deals/DealsPage';
 import { ChatPage } from './pages/chat/ChatPage';
 
-// New Feature Pages
 import { DocumentVaultPage } from './pages/documents/DocumentVaultPage';
 import { MeetingCalendarPage } from './pages/meetings/MeetingCalendarPage';
 import { PaymentsPage } from './pages/payments/PaymentsPage';
 import { VideoCallRoomPage } from './pages/video/VideoCallRoomPage';
+import { AdminDashboard } from './pages/dashboard/AdminDashboard';
 
 // Lazy-loaded for code-splitting heavy pages
 const DocumentsPage = lazy(() =>
@@ -97,6 +97,7 @@ function AppRoutes() {
       >
         <Route path="entrepreneur" element={<EntrepreneurDashboard />} />
         <Route path="investor" element={<InvestorDashboard />} />
+        <Route path="admin" element={<AdminDashboard />} />
         <Route index element={<Navigate to="entrepreneur" replace />} />
       </Route>
 
