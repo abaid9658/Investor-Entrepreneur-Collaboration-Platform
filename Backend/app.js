@@ -94,7 +94,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/support', supportRoutes);
 
-// Health check endpoint (useful for Render uptime monitoring)
+// Health check endpoints (useful for Render uptime monitoring)
+app.get('/', (_req, res) => res.status(200).json({ status: 'ok', service: 'Nexus API Gateway' }));
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 
 // ─── 5. 404 CATCH-ALL ────────────────────────────────────────────────────────
