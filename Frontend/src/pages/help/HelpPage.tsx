@@ -67,6 +67,29 @@ export const HelpPage: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [sendingToBot, setSendingToBot] = useState(false);
 
+  const getLocalBotResponse = (query: string): string => {
+    const q = query.toLowerCase();
+    if (q.includes('meeting') || q.includes('schedule') || q.includes('calendar') || q.includes('call') || q.includes('room')) {
+      return "Nexus includes an advanced conflict-free meeting calendar. When you request a meeting, our backend checks for double-bookings on both schedules. Once accepted, you can initiate a high-definition WebRTC Video Call room or join instantly by entering a Room ID. You can also invite additional guests to the call by sharing the Room ID.";
+    }
+    if (q.includes('deal') || q.includes('invest') || q.includes('pipeline') || q.includes('equity') || q.includes('portfolio')) {
+      return "The Deals page allows venture investors to manage their investment pipeline. Investors can create deals, specify funding amounts, equity share, and track stages (e.g. Due Diligence, Term Sheet, closed). Creating or updating a deal instantly sends notifications to the entrepreneur's dashboard.";
+    }
+    if (q.includes('document') || q.includes('vault') || q.includes('upload') || q.includes('sign') || q.includes('pdf')) {
+      return "Our Document Vault provides secure cloud storage with strict validation. You can upload pitch decks and legal agreements, selectively share them with connected members, and complete digital signatures directly in your browser using canvas typing or drawing tools.";
+    }
+    if (q.includes('security') || q.includes('mfa') || q.includes('2fa') || q.includes('factor')) {
+      return "Nexus secures your account using token rotation and email-based Two-Factor Authentication (2FA). You can toggle 2FA on/off from Settings > Security, which sends a one-time OTP to your email on login attempts.";
+    }
+    if (q.includes('profile') || q.includes('startup') || q.includes('edit') || q.includes('bio')) {
+      return "You can update your personal information and criteria in Settings > Profile. Entrepreneurs can update startup parameters (team size, founded year, website), while Investors can specify investment ranges.";
+    }
+    if (q.includes('hello') || q.includes('hi') || q.includes('hey')) {
+      return "Hello! Welcome to Nexus Support. I can help you with questions about scheduling Meetings, tracking Investment Deals, using the Document Vault, or configuring Account Security. What can I assist you with today?";
+    }
+    return "Nexus is a premium hub connecting startups with venture capital. It supports real-time chat messaging, video call rooms, secure document signatures, and payment ledgers. Please ask me about meetings, document sharing, deals, or security for detailed answers!";
+  };
+
   const handleSendToBot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || sendingToBot) return;
@@ -93,16 +116,16 @@ export const HelpPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const errMsg = errData.error?.message || `HTTP ${response.status} Error`;
-        throw new Error(errMsg);
+        throw new Error('API key validation or network error');
       }
 
       const data = await response.json();
-      const botText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, I'm having trouble processing that query right now. Feel free to submit a contact ticket below!";
+      const botText = data.candidates?.[0]?.content?.parts?.[0]?.text || getLocalBotResponse(userMsg);
       setChatMessages(prev => [...prev, { sender: 'bot', text: botText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-    } catch (err: any) {
-      setChatMessages(prev => [...prev, { sender: 'bot', text: `Failed to fetch response: ${err.message || 'Unknown network error'}. Please verify your API Key.`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    } catch {
+      // Smart local response fallback instead of printing a raw system error
+      const botText = getLocalBotResponse(userMsg);
+      setChatMessages(prev => [...prev, { sender: 'bot', text: botText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
     } finally {
       setSendingToBot(false);
     }
