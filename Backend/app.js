@@ -15,6 +15,7 @@ import documentRoutes from './routes/document.js';
 import notificationRoutes from './routes/notification.js';
 import paymentRoutes from './routes/payment.js';
 import dealRoutes from './routes/deals.js';
+import supportRoutes from './routes/support.js';
 
 import errorHandler from './middlewares/errorHandler.js';
 import { apiLimiter } from './middlewares/rateLimiter.js';
@@ -91,6 +92,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/deals', dealRoutes);
+app.use('/api/support', supportRoutes);
 
 // Health check endpoint (useful for Render uptime monitoring)
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));

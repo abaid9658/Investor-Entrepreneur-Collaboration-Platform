@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Users, BarChart3, Shield, Activity, DollarSign,
+  Users, BarChart3, Shield, Activity, DollarSign, HelpCircle,
   TrendingUp, Trash2, CheckCircle2, UserX, UserCheck, RefreshCw, Radio
 } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '../../components/ui/Card';
@@ -65,8 +65,29 @@ export const AdminDashboard: React.FC = () => {
     }
   });
 
+  // Fetch Support Tickets
+  const { data: supportResponse, isLoading: isSupportLoading } = useQuery({
+    queryKey: ['admin-support-messages'],
+    queryFn: async () => {
+      const res = await axiosInstance.get('/support');
+      return res.data;
+    }
+  });
+
+  const resolveTicketMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await axiosInstance.put(`/support/${id}/resolve`);
+    },
+    onSuccess: () => {
+      toast.success('Ticket marked as resolved');
+      queryClient.invalidateQueries({ queryKey: ['admin-support-messages'] });
+    },
+    onError: () => toast.error('Failed to resolve support ticket')
+  });
+
   const profiles = profilesResponse?.data || [];
   const transactions = ledgerResponse?.data || [];
+  const supportTickets = supportResponse?.data || [];
 
   // Derived statistics
   const totalUsers = profiles.length;
@@ -76,7 +97,8 @@ export const AdminDashboard: React.FC = () => {
     .filter((tx: any) => tx.status === 'completed')
     .reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
 
-  // Soft delete user mock toggle (could be hooked to soft delete endpoint)
+  const pendingTicketsCount = supportTickets.filter((t: any) => !t.isResolved).length;
+
   const handleToggleDeactivate = (userId: string, userName: string) => {
     toast.success(`User ${userName} account deactivation processed.`);
     setLiveLogs(prev => [`[ADMIN] Deactivated user ${userName} (${userId})`, ...prev]);
@@ -131,7 +153,7 @@ export const AdminDashboard: React.FC = () => {
               ) : profiles.length === 0 ? (
                 <div className="p-8 text-center text-gray-500 text-sm">No profiles found in database. Seed data to test.</div>
               ) : (
-                <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+                <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
                   {profiles.map((p: any) => {
                     if (!p.user) return null;
                     return (
@@ -171,7 +193,7 @@ export const AdminDashboard: React.FC = () => {
               <h2 className="text-lg font-bold text-gray-900">Live Audit Trail</h2>
               <RefreshCw className="text-indigo-600 animate-spin-slow" size={16} />
             </CardHeader>
-            <CardBody className="bg-slate-900 text-white rounded-b-2xl p-4 font-mono text-xs overflow-hidden h-[500px] relative border border-slate-950">
+            <CardBody className="bg-slate-900 text-white rounded-b-2xl p-4 font-mono text-xs overflow-hidden h-[400px] relative border border-slate-950">
               <div className="space-y-2 h-full overflow-y-auto pr-2 custom-scrollbar">
                 {liveLogs.map((log, index) => (
                   <div key={index} className="flex gap-2 items-start border-l border-indigo-500/20 pl-2 py-0.5">
@@ -184,6 +206,74 @@ export const AdminDashboard: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Support Messages Tab */}
+      <Card>
+        <CardHeader className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <HelpCircle className="text-purple-600" size={20} />
+            <h2 className="text-lg font-bold text-gray-900">User Support Messages</h2>
+          </div>
+          {pendingTicketsCount > 0 && (
+            <Badge variant="error">{pendingTicketsCount} Pending</Badge>
+          )}
+        </CardHeader>
+        <CardBody>
+          {isSupportLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <div className="w-8 h-8 border-4 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
+            </div>
+          ) : supportTickets.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm">No support messages submitted yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-gray-500 font-semibold">
+                    <th className="pb-3 pr-4">User Details</th>
+                    <th className="pb-3 pr-4">Message</th>
+                    <th className="pb-3 pr-4">Date</th>
+                    <th className="pb-3 pr-4">Status</th>
+                    <th className="pb-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {supportTickets.map((t: any) => (
+                    <tr key={t._id} className="hover:bg-gray-50/50">
+                      <td className="py-4 pr-4">
+                        <p className="font-semibold text-gray-900">{t.name}</p>
+                        <p className="text-xs text-gray-500">{t.email}</p>
+                      </td>
+                      <td className="py-4 pr-4 text-gray-600 max-w-xs truncate" title={t.message}>
+                        {t.message}
+                      </td>
+                      <td className="py-4 pr-4 text-xs text-gray-400">
+                        {new Date(t.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 pr-4">
+                        <Badge variant={t.isResolved ? 'success' : 'error'}>
+                          {t.isResolved ? 'Resolved' : 'Pending'}
+                        </Badge>
+                      </td>
+                      <td className="py-4 text-right">
+                        {!t.isResolved && (
+                          <Button
+                            size="sm"
+                            onClick={() => resolveTicketMutation.mutate(t._id)}
+                            disabled={resolveTicketMutation.isPending}
+                          >
+                            Mark Resolved
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 };
