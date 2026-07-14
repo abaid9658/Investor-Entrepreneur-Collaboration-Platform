@@ -137,9 +137,9 @@ export const AdminDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* User Accounts Moderation List */}
-        <div className="lg:col-span-2">
+        <div className="w-full">
           <Card className="h-full">
             <CardHeader className="flex justify-between items-center">
               <h2 className="text-lg font-bold text-gray-900">Registered Accounts</h2>
@@ -182,26 +182,6 @@ export const AdminDashboard: React.FC = () => {
                   })}
                 </div>
               )}
-            </CardBody>
-          </Card>
-        </div>
-
-        {/* Real-time Activity Logs */}
-        <div className="lg:col-span-1">
-          <Card className="h-full">
-            <CardHeader className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Live Audit Trail</h2>
-              <RefreshCw className="text-indigo-600 animate-spin-slow" size={16} />
-            </CardHeader>
-            <CardBody className="bg-slate-900 text-white rounded-b-2xl p-4 font-mono text-xs overflow-hidden h-[400px] relative border border-slate-950">
-              <div className="space-y-2 h-full overflow-y-auto pr-2 custom-scrollbar">
-                {liveLogs.map((log, index) => (
-                  <div key={index} className="flex gap-2 items-start border-l border-indigo-500/20 pl-2 py-0.5">
-                    <span className="text-indigo-400 select-none">&gt;</span>
-                    <span className="break-all">{log}</span>
-                  </div>
-                ))}
-              </div>
             </CardBody>
           </Card>
         </div>
