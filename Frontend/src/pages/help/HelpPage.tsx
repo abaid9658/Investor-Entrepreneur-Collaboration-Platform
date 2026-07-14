@@ -92,11 +92,17 @@ export const HelpPage: React.FC = () => {
         })
       });
 
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `HTTP ${response.status} Error`;
+        throw new Error(errMsg);
+      }
+
       const data = await response.json();
       const botText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, I'm having trouble processing that query right now. Feel free to submit a contact ticket below!";
       setChatMessages(prev => [...prev, { sender: 'bot', text: botText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-    } catch {
-      setChatMessages(prev => [...prev, { sender: 'bot', text: 'Sorry, I failed to reach the intelligence system. Please try again.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    } catch (err: any) {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: `Failed to fetch response: ${err.message || 'Unknown network error'}. Please verify your API Key.`, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
     } finally {
       setSendingToBot(false);
     }

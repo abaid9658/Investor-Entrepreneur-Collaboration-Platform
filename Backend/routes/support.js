@@ -1,6 +1,6 @@
 import express from 'express';
 import SupportMessage from '../models/SupportMessage.js';
-import { protect, admin } from '../middlewares/authMiddleware.js';
+import { protect, authorize } from '../middlewares/authMiddleware.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 const router = express.Router();
@@ -23,13 +23,13 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 // Admin-only endpoint to get all support messages
-router.get('/', protect, admin, asyncHandler(async (req, res) => {
+router.get('/', protect, authorize('admin'), asyncHandler(async (req, res) => {
   const messages = await SupportMessage.find().populate('user', 'name email role').sort({ createdAt: -1 });
   res.status(200).json({ success: true, data: messages });
 }));
 
 // Admin-only endpoint to mark a message as resolved
-router.put('/:id/resolve', protect, admin, asyncHandler(async (req, res) => {
+router.put('/:id/resolve', protect, authorize('admin'), asyncHandler(async (req, res) => {
   const msg = await SupportMessage.findById(req.params.id);
   if (!msg) {
     return res.status(404).json({ success: false, message: 'Support message not found' });
